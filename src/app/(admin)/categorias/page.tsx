@@ -1,6 +1,6 @@
 import { getCategorias } from '@/actions/catalogos';
 import CatalogoSimpleClient from '@/components/ui-custom/catalogo-simple-client';
-import { crearCategoria, actualizarCategoria, eliminarCategoria } from '@/actions/catalogos';
+import { crearCategoria, actualizarCategoria, eliminarCategoria, verificarUsoCategoria } from '@/actions/catalogos';
 
 export default async function CategoriasPage() {
   const items = await getCategorias();
@@ -11,6 +11,7 @@ export default async function CategoriasPage() {
       onCreate={crearCategoria}
       onUpdate={actualizarCategoria}
       onDelete={eliminarCategoria}
+      onCheckUso={verificarUsoCategoria}
     />
   );
 }

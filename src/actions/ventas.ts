@@ -44,11 +44,10 @@ export async function procesarVenta(input: {
       return { error: 'Sesión de caja inválida.' };
     }
 
-    // Validar stock con FOR UPDATE para evitar race conditions
+    // Validar stock con FOR UPDATE sobre la fila del producto para evitar race conditions
     for (const item of items) {
       const [sRows] = await conn.query<RowDataPacket[]>(
-        `SELECT COALESCE(SUM(CASE WHEN tipo='entrada' THEN cantidad ELSE -cantidad END), 0) AS stock
-         FROM movimientos_inventario WHERE producto_id = ? FOR UPDATE`,
+        `SELECT stock FROM productos WHERE id = ? FOR UPDATE`,
         [item.producto.id]
       );
       const stock = Number(sRows[0]?.stock ?? 0);
@@ -79,6 +78,10 @@ export async function procesarVenta(input: {
         `INSERT INTO movimientos_inventario (producto_id, tipo, motivo, cantidad, usuario_id, referencia)
          VALUES (?, 'salida', 'venta', ?, ?, ?)`,
         [item.producto.id, item.cantidad, session.sub, folio]
+      );
+      await conn.query(
+        `UPDATE productos SET stock = stock - ? WHERE id = ?`,
+        [item.cantidad, item.producto.id]
       );
     }
 
@@ -168,8 +171,7 @@ export async function getDashboardStats() {
      FROM ventas WHERE MONTH(creado_at) = MONTH(CURDATE()) AND YEAR(creado_at) = YEAR(CURDATE())`
   );
   const [totalStock] = await pool.query<RowDataPacket[]>(
-    `SELECT COALESCE(SUM(CASE WHEN tipo='entrada' THEN cantidad ELSE -cantidad END), 0) AS stock_total
-     FROM movimientos_inventario`
+    `SELECT COALESCE(SUM(stock), 0) AS stock_total FROM productos`
   );
   const [ventasPorDia] = await pool.query<RowDataPacket[]>(
     `SELECT DATE_FORMAT(DATE(creado_at), '%Y-%m-%d') AS fecha, COALESCE(SUM(total), 0) AS ingresos, COUNT(*) AS ventas

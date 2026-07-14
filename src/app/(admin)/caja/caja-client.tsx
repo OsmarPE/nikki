@@ -18,13 +18,17 @@ import type { SesionCajaDetalle } from '@/actions/caja';
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
+// mysql2 puede entregar DATETIME como Date o como string sin timezone
+// ("YYYY-MM-DD HH:MM:SS"); normalizar ambos casos como UTC.
+function toDate(v: Date | string): Date {
+  return v instanceof Date ? v : new Date(String(v).replace(' ', 'T') + 'Z');
+}
+
 function duracion(apertura: Date | string, cierre: Date | string | null): string {
-  console.log('apertura', apertura);
-  console.log('cierre', cierre);
-  const fin    = cierre ? new Date(cierre) : new Date();
-  const ms     = fin.getTime() - new Date(apertura).getTime();
-  const h      = Math.floor(ms / 3_600_000);
-  const m      = Math.floor((ms % 3_600_000) / 60_000);
+  const fin = cierre ? toDate(cierre) : new Date();
+  const ms  = fin.getTime() - toDate(apertura).getTime();
+  const h   = Math.floor(ms / 3_600_000);
+  const m   = Math.floor((ms % 3_600_000) / 60_000);
   return h > 0 ? `${h}h ${m}m` : `${m}m`;
 }
 
@@ -196,10 +200,6 @@ export default function CajaClient({ sesiones, resumen }: Props) {
   // Comparar usando fecha local de la zona de la app (no UTC)
   const todayStr = new Date().toLocaleDateString('en-CA', { timeZone: 'America/Mexico_City' });
 
-  // mysql2 puede entregar DATETIME como Date o como string; normalizar ambos
-  const toDate = (v: Date | string) =>
-    v instanceof Date ? v : new Date(String(v).replace(' ', 'T') + 'Z');
-
   const hoy      = useMemo(() => sesiones.filter(s => {
     const localStr = toDate(s.fecha_apertura).toLocaleDateString('en-CA', { timeZone: 'America/Mexico_City' });
     return localStr === todayStr;
@@ -211,7 +211,6 @@ export default function CajaClient({ sesiones, resumen }: Props) {
   }), [sesiones, todayStr]);
 
   const lista = tab === 'hoy' ? hoy : historial;
-  console.log(lista);
   const { paged: mostradas, ...pag } = usePagination(lista, { pageSize: 15 });
 
   const cajasAbiertas = Number(resumen?.cajas_abiertas ?? 0);

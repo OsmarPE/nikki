@@ -1,15 +1,15 @@
-import { reload } from '@/hooks/use-reload';
 'use client';
+
+import { reload } from '@/hooks/use-reload';
 
 import { useTransition } from 'react';
 import { useForm } from 'react-hook-form';
-import { zodResolver } from '@hookform/resolvers/zod';
 import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { FormField } from '@/components/ui/form-field';
 import { abrirCaja } from '@/actions/caja';
-import { abrirCajaSchema, type AbrirCajaFormValues } from '@/lib/validations';
+import { zodResolver, abrirCajaSchema, type AbrirCajaFormValues } from '@/lib/validations';
 
 export default function AbrirCajaForm() {
   const [pending, startTransition] = useTransition();

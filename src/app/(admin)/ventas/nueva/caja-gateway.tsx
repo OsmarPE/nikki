@@ -2,7 +2,6 @@
 
 import { useState, useTransition } from 'react';
 import { useForm } from 'react-hook-form';
-import { zodResolver } from '@hookform/resolvers/zod';
 import { useRouter } from 'next/navigation';
 import { toast } from 'sonner';
 import {
@@ -17,7 +16,7 @@ import { Badge } from '@/components/ui/badge';
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription, SheetFooter } from '@/components/ui/sheet';
 import { FormField } from '@/components/ui/form-field';
 import { abrirCaja, cerrarCaja } from '@/actions/caja';
-import { abrirCajaSchema, cerrarCajaSchema, type AbrirCajaFormValues, type CerrarCajaFormValues } from '@/lib/validations';
+import { zodResolver, abrirCajaSchema, cerrarCajaSchema, type AbrirCajaFormValues, type CerrarCajaFormValues } from '@/lib/validations';
 import { formatCurrency, formatTime, formatTimeShort } from '@/lib/utils';
 import type { SesionCajaDetalle } from '@/actions/caja';
 

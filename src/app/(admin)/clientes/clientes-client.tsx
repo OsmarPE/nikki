@@ -5,7 +5,6 @@ import { usePagination } from '@/hooks/use-pagination';
 import { PaginationControls } from '@/components/ui/pagination-controls';
 import { useState, useTransition } from 'react';
 import { useForm } from 'react-hook-form';
-import { zodResolver } from '@hookform/resolvers/zod';
 import { toast } from 'sonner';
 import { UserRound, Phone, Mail, MoreVertical, Pencil, Trash2, UserPlus, FileDown } from 'lucide-react';
 import { Button } from '@/components/ui/button';
@@ -18,7 +17,7 @@ import { ConfirmDialog } from '@/components/ui/confirm-dialog';
 import { Text } from '@/components/ui/text';
 import { crearCliente, actualizarCliente, eliminarCliente, verificarDependenciasCliente } from '@/actions/clientes';
 import { formatDate } from '@/lib/utils';
-import { clienteSchema, type ClienteFormValues } from '@/lib/validations';
+import { zodResolver, clienteSchema, type ClienteFormValues } from '@/lib/validations';
 import type { Cliente } from '@/types';
 
 function ClienteForm({ defaultValues, onSubmit, pending, onCancel }: {

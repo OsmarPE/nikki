@@ -65,6 +65,10 @@ export async function GET(
   const fontSemi = await doc.embedFont(semiBoldBytes);
   const fontBold = await doc.embedFont(boldBytes);
 
+  // ─── Logo ──────────────────────────────────────────────────────────────────
+  const logoBytes = readFileSync(join(process.cwd(), 'public', 'logo.png'));
+  const logoImage = await doc.embedPng(logoBytes);
+
   // ─── Primitivos ───────────────────────────────────────────────────────────────
   function t(
     text: string,
@@ -90,10 +94,15 @@ export async function GET(
   // "Comprobante de venta" grande
   t('Comprobante de venta', MARGIN, y, { size: 22, font: fontBold });
 
-  // Logo / nombre negocio — círculo negro + inicial
-  const logoX = RIGHT - 18, logoY = y + 4;
-  page.drawCircle({ x: logoX, y: logoY, size: 18, color: C.black });
-  t('N', logoX, logoY - 7, { size: 13, font: fontBold, color: C.white, align: 'center' });
+  // Logo / nombre negocio
+  const logoHeight = 50;
+  const logoDims   = logoImage.scale(logoHeight / logoImage.height);
+  page.drawImage(logoImage, {
+    x: RIGHT - logoDims.width,
+    y: y - 21,
+    width: logoDims.width,
+    height: logoDims.height,
+  });
 
   y -= 22;
   t('Nikki', MARGIN, y, { size: 11, color: C.gray, font: fontReg });
@@ -214,7 +223,6 @@ export async function GET(
     x: RIGHT - badgeW, y: y - 4,
     width: badgeW, height: 16,
     color: rgb(0.94, 0.94, 0.95),
-    borderRadius: 4,
   });
   t(badgeLabel, RIGHT - badgeW / 2, y + 1, { size: 8, color: C.gray, align: 'center' });
 

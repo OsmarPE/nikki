@@ -1,9 +1,9 @@
-import { reload } from '@/hooks/use-reload';
 'use client';
+
+import { reload } from '@/hooks/use-reload';
 
 import { useState, useTransition } from 'react';
 import { useForm } from 'react-hook-form';
-import { zodResolver } from '@hookform/resolvers/zod';
 import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -22,7 +22,7 @@ import { calcularCarrito } from '@/lib/promocion';
 import { formatCurrency } from '@/lib/utils';
 import { useDebounce } from '@/hooks/use-debounce';
 import { Text } from '@/components/ui/text';
-import { clienteSchema, cerrarCajaSchema, type ClienteFormValues, type CerrarCajaFormValues } from '@/lib/validations';
+import { zodResolver, clienteSchema, cerrarCajaSchema, type ClienteFormValues, type CerrarCajaFormValues } from '@/lib/validations';
 import type { Producto, Cliente, SesionCaja, ItemCarrito } from '@/types';
 
 type MetodoPago = 'efectivo' | 'transferencia' | 'tarjeta';

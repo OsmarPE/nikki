@@ -4,7 +4,7 @@ import { useState, useTransition, useMemo, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 import { toast } from 'sonner';
 import { ColumnDef } from '@tanstack/react-table';
-import { MoreHorizontalIcon, PencilIcon, Trash2Icon, Package, X, SlidersHorizontal, ChevronDown, Plus, FileDown } from 'lucide-react';
+import { MoreHorizontalIcon, PencilIcon, Trash2Icon, Package, X, SlidersHorizontal, ChevronDown, Plus, FileDown, AlertTriangle, CircleAlert } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
@@ -21,6 +21,29 @@ interface Props {
   categorias: Categoria[];
   marcas: Marca[];
   colecciones: Coleccion[];
+}
+
+// ─── Miniatura de producto con fallback si no hay imagen o falla al cargar ────
+function ProductoThumb({ src, alt }: { src: string | null; alt: string }) {
+  const [broken, setBroken] = useState(false);
+
+  if (!src || broken) {
+    return (
+      <div className="h-8 w-8 rounded-md bg-muted flex items-center justify-center shrink-0">
+        <Package size={14} className="text-muted-foreground" />
+      </div>
+    );
+  }
+
+  return (
+    // eslint-disable-next-line @next/next/no-img-element
+    <img
+      src={src}
+      alt={alt}
+      onError={() => setBroken(true)}
+      className="h-8 w-8 rounded-md object-cover bg-muted shrink-0"
+    />
+  );
 }
 
 // ─── Panel de filtros ─────────────────────────────────────────────────────────
@@ -131,9 +154,9 @@ function ProductosFiltroPanel({
         )}
       </div>
       <div className="border-t border-border/60 px-3 py-2">
-        <Button type="button" onClick={onClose} className={'w-full h-8'} variant={'outline'}>
+        {/* <Button type="button" onClick={onClose} className={'w-full h-8'} variant={'outline'}>
          Aplicar
-        </Button>
+        </Button> */}
       </div>
     </div>
   );
@@ -148,6 +171,7 @@ export default function ProductosClient({ productos: initial, categorias, marcas
   const [marcasFiltro, setMarcasFiltro] = useState<Set<string>>(new Set());
   const [categoriasFiltro, setCategoriasFiltro] = useState<Set<string>>(new Set());
   const [coleccionesFiltro, setColeccionesFiltro] = useState<Set<string>>(new Set());
+  const [soloSinStock, setSoloSinStock] = useState(false);
   const [, startTransition] = useTransition();
   const [exportando, setExportando] = useState(false);
   async function handleExport() {
@@ -173,7 +197,11 @@ export default function ProductosClient({ productos: initial, categorias, marcas
   const [confirmDeps, setConfirmDeps] = useState<{ ventas: number; movimientos: number } | null>(null);
 
   const totalFiltrosActivos = marcasFiltro.size + categoriasFiltro.size + coleccionesFiltro.size;
-  const hayFiltros = busqueda || totalFiltrosActivos > 0;
+  const hayFiltros = busqueda || totalFiltrosActivos > 0 || soloSinStock;
+
+  const sinStockCount = useMemo(() =>
+    productos.filter(p => Number(p.stock ?? 0) <= 0).length,
+  [productos]);
 
   const filtrados = useMemo(() => productos.filter(p => {
     const matchBusqueda = !busqueda ||
@@ -182,8 +210,9 @@ export default function ProductosClient({ productos: initial, categorias, marcas
     const matchMarca     = marcasFiltro.size === 0     || (p.marca_nombre      != null && marcasFiltro.has(p.marca_nombre));
     const matchCategoria = categoriasFiltro.size === 0 || (p.categoria_nombre  != null && categoriasFiltro.has(p.categoria_nombre));
     const matchColeccion = coleccionesFiltro.size === 0|| (p.coleccion_nombre  != null && coleccionesFiltro.has(p.coleccion_nombre));
-    return matchBusqueda && matchMarca && matchCategoria && matchColeccion;
-  }), [productos, busqueda, marcasFiltro, categoriasFiltro, coleccionesFiltro]);
+    const matchStock      = !soloSinStock || Number(p.stock ?? 0) <= 0;
+    return matchBusqueda && matchMarca && matchCategoria && matchColeccion && matchStock;
+  }), [productos, busqueda, marcasFiltro, categoriasFiltro, coleccionesFiltro, soloSinStock]);
 
   function pedirEliminar(id: number, nombre: string) {
     setConfirmTarget({ id, nombre });
@@ -218,15 +247,7 @@ export default function ProductosClient({ productos: initial, categorias, marcas
           onClick={() => router.push(`/productos/${row.original.id}`)}
           className="flex items-center gap-2.5 text-left hover:opacity-80 transition-opacity"
         >
-          {row.original.imagen_url ? (
-            // eslint-disable-next-line @next/next/no-img-element
-            <img src={row.original.imagen_url} alt={row.original.nombre}
-              className="h-8 w-8 rounded-md object-cover bg-muted shrink-0" />
-          ) : (
-            <div className="h-8 w-8 rounded-md bg-muted flex items-center justify-center shrink-0">
-              <Package size={14} className="text-muted-foreground" />
-            </div>
-          )}
+          <ProductoThumb src={row.original.imagen_url} alt={row.original.nombre} />
           <div>
             <p className="font-medium text-sm leading-tight">{row.original.nombre}</p>
             <p className="font-mono text-[11px] text-muted-foreground">{row.original.sku}</p>
@@ -343,9 +364,26 @@ export default function ProductosClient({ productos: initial, categorias, marcas
           )}
         </div>
 
+        <button
+          type="button"
+          disabled={sinStockCount === 0}
+          onClick={() => setSoloSinStock(v => !v)}
+          className={[
+            'inline-flex items-center gap-1.5 h-8 rounded-md border px-2.5 text-sm transition-colors disabled:opacity-50 disabled:cursor-not-allowed',
+            soloSinStock
+              ? 'border-destructive/40 bg-destructive/10 text-destructive font-medium'
+              : sinStockCount > 0
+                ? 'border-destructive/30 text-destructive hover:bg-destructive/5'
+                : 'border-border text-muted-foreground',
+          ].join(' ')}
+        >
+          <CircleAlert size={13} />
+          {sinStockCount} sin stock
+        </button>
+
         {hayFiltros && (
           <Button variant="outline" size="sm"
-            onClick={() => { setBusqueda(''); setMarcasFiltro(new Set()); setCategoriasFiltro(new Set()); setColeccionesFiltro(new Set()); }}
+            onClick={() => { setBusqueda(''); setMarcasFiltro(new Set()); setCategoriasFiltro(new Set()); setColeccionesFiltro(new Set()); setSoloSinStock(false); }}
             className="h-8 px-2 gap-1.5">
             <X size={13} /> Limpiar
           </Button>

@@ -3,13 +3,17 @@
 import { useState, useMemo } from 'react';
 import { useRouter } from 'next/navigation';
 import { ColumnDef } from '@tanstack/react-table';
+import { format } from 'date-fns';
+import { es } from 'date-fns/locale';
 import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
 import { DataTable } from '@/components/ui/data-table';
 import { FacetedFilter } from '@/components/ui/combobox';
+import { Calendar } from '@/components/ui/calendar';
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Text } from '@/components/ui/text';
-import { formatCurrency, formatDate } from '@/lib/utils';
-import { Banknote, CreditCard, ArrowRightLeft, X, PlusCircle } from 'lucide-react';
+import { cn, formatCurrency, formatDate, toLocalDateKey } from '@/lib/utils';
+import { Banknote, CreditCard, ArrowRightLeft, X, PlusCircle, CalendarIcon } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import type { Venta } from '@/types';
 
@@ -111,6 +115,9 @@ export default function VentasClient({ ventas }: { ventas: Venta[] }) {
   const columns = useMemo(() => buildColumns(router), [router]);
   const [busqueda, setBusqueda] = useState('');
   const [metodos, setMetodos] = useState<Set<string>>(new Set());
+  const [fecha, setFecha] = useState('');
+  const [calendarOpen, setCalendarOpen] = useState(false);
+  const fechaSeleccionada = fecha ? new Date(`${fecha}T00:00:00`) : undefined;
 
   // Contar métodos para el badge de cantidad en el filter
   const metodosConConteo = useMemo(() =>
@@ -129,15 +136,18 @@ export default function VentasClient({ ventas }: { ventas: Venta[] }) {
 
       const matchMetodo = metodos.size === 0 || metodos.has(v.metodo_pago);
 
-      return matchBusqueda && matchMetodo;
-    }),
-  [ventas, busqueda, metodos]);
+      const matchFecha = !fecha || toLocalDateKey(v.creado_at) === fecha;
 
-  const hayFiltros = busqueda || metodos.size > 0;
+      return matchBusqueda && matchMetodo && matchFecha;
+    }),
+  [ventas, busqueda, metodos, fecha]);
+
+  const hayFiltros = busqueda || metodos.size > 0 || fecha;
 
   function limpiarTodo() {
     setBusqueda('');
     setMetodos(new Set());
+    setFecha('');
   }
 
   return (
@@ -167,6 +177,32 @@ export default function VentasClient({ ventas }: { ventas: Venta[] }) {
           onSelectionChange={setMetodos}
         />
 
+        <Popover open={calendarOpen} onOpenChange={setCalendarOpen}>
+          <PopoverTrigger
+            render={
+              <Button
+                variant="outline"
+                size="sm"
+                className={cn('h-8 text-sm font-normal justify-start', !fecha && 'text-muted-foreground')}
+              />
+            }
+          >
+            <CalendarIcon size={13} />
+            {fecha ? format(fechaSeleccionada!, "d 'de' MMMM, yyyy", { locale: es }) : 'Filtrar por fecha'}
+          </PopoverTrigger>
+          <PopoverContent className="w-auto p-0">
+            <Calendar
+              mode="single"
+              locale={es}
+              selected={fechaSeleccionada}
+              onSelect={date => {
+                setFecha(date ? format(date, 'yyyy-MM-dd') : '');
+                setCalendarOpen(false);
+              }}
+            />
+          </PopoverContent>
+        </Popover>
+
         {hayFiltros && (
           <Button
             variant="outline"
@@ -188,7 +224,7 @@ export default function VentasClient({ ventas }: { ventas: Venta[] }) {
         columns={columns}
         data={filtradas}
         emptyMessage="Sin ventas."
-          pageSize={25}
+          pageSize={20}
       />
     </div>
   );

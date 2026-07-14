@@ -1,6 +1,6 @@
 'use client';
 
-import { useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { ImageIcon, Upload, X, AlertCircle } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
@@ -15,6 +15,11 @@ export function ImageUpload({ value, onChange, className }: ImageUploadProps) {
   const [uploading, setUploading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [dragging, setDragging] = useState(false);
+  const [broken, setBroken] = useState(false);
+
+  useEffect(() => {
+    setBroken(false);
+  }, [value]);
 
   async function upload(file: File) {
     setError(null);
@@ -47,12 +52,13 @@ export function ImageUpload({ value, onChange, className }: ImageUploadProps) {
   return (
     <div className={cn('space-y-2', className)}>
       {/* Preview */}
-      {value ? (
+      {value && !broken ? (
         <div className="relative group w-full aspect-video rounded-lg overflow-hidden border border-border bg-muted">
           {/* eslint-disable-next-line @next/next/no-img-element */}
           <img
             src={value}
             alt="Preview"
+            onError={() => setBroken(true)}
             className="w-full h-full object-cover"
           />
           {/* Overlay con botón quitar */}
@@ -104,10 +110,17 @@ export function ImageUpload({ value, onChange, className }: ImageUploadProps) {
               )}>
                 <ImageIcon size={20} className={dragging ? 'text-primary' : ''} />
               </div>
-              <div className="text-center leading-snug">
-                <span className="font-medium text-foreground">Sube una imagen</span>
-                <span className="text-muted-foreground"> o arrastra aquí</span>
-              </div>
+              {broken ? (
+                <div className="text-center leading-snug">
+                  <span className="font-medium text-foreground">La imagen ya no está disponible</span>
+                  <span className="text-muted-foreground"> — sube una nueva o arrastra aquí</span>
+                </div>
+              ) : (
+                <div className="text-center leading-snug">
+                  <span className="font-medium text-foreground">Sube una imagen</span>
+                  <span className="text-muted-foreground"> o arrastra aquí</span>
+                </div>
+              )}
               <span className="text-xs text-muted-foreground">JPG, PNG, WebP · máx. 4 MB</span>
             </>
           )}

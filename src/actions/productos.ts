@@ -45,13 +45,7 @@ export async function buscarProductosPOS(query: string): Promise<Producto[]> {
   const escaped = query.trim().replace(/[%_\\]/g, '\\$&');
   const like = `%${escaped}%`;
   const [rows] = await pool.query<RowDataPacket[]>(`
-    SELECT
-      p.*,
-      m.nombre AS marca_nombre,
-      COALESCE(
-        (SELECT SUM(CASE WHEN tipo='entrada' THEN cantidad ELSE -cantidad END)
-         FROM movimientos_inventario WHERE producto_id = p.id), 0
-      ) AS stock
+    SELECT p.*, m.nombre AS marca_nombre
     FROM productos p
     LEFT JOIN marcas m ON m.id = p.marca_id
     WHERE (p.sku LIKE ? OR p.nombre LIKE ?)
@@ -59,6 +53,30 @@ export async function buscarProductosPOS(query: string): Promise<Producto[]> {
     LIMIT 20
   `, [like, like]);
   return rows as Producto[];
+}
+
+export async function listarProductosPOS(
+  query: string,
+  page: number,
+  pageSize: number,
+): Promise<{ items: Producto[]; total: number }> {
+  const trimmed = query.trim();
+  const like = trimmed ? `%${trimmed.replace(/[%_\\]/g, '\\$&')}%` : null;
+  const offset = Math.max(0, page - 1) * pageSize;
+
+  const [rows] = await pool.query<RowDataPacket[]>(`
+    SELECT p.*, m.nombre AS marca_nombre, COUNT(*) OVER() AS total_count
+    FROM productos p
+    LEFT JOIN marcas m ON m.id = p.marca_id
+    ${like ? 'WHERE (p.sku LIKE ? OR p.nombre LIKE ?)' : ''}
+    ORDER BY p.nombre ASC
+    LIMIT ? OFFSET ?
+  `, like ? [like, like, pageSize, offset] : [pageSize, offset]);
+
+  const total = rows.length > 0 ? Number((rows[0] as RowDataPacket).total_count) : 0;
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  const items = (rows as RowDataPacket[]).map(({ total_count, ...rest }) => rest) as Producto[];
+  return { items, total };
 }
 
 export async function crearProducto(data: {

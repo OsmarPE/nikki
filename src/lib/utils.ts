@@ -21,7 +21,7 @@ const TZ = 'America/Mexico_City';
  * Cuando sí llegan como string (ej. columnas calculadas, DATE_FORMAT, etc.)
  * pueden venir sin sufijo 'Z', así que los normalizamos.
  */
-function parseMySQL(value: Date | string | null | undefined): Date {
+export function parseMySQL(value: Date | string | null | undefined): Date {
   if (!value) return new Date(NaN);
 
   // mysql2 ya lo convirtió a Date correctamente (UTC)
@@ -33,6 +33,11 @@ function parseMySQL(value: Date | string | null | undefined): Date {
   // String de MySQL sin zona ("2024-11-01 14:30:00" o "2024-11-01T14:30:00")
   // El pool usa timezone '+00:00' → estos valores son UTC, añadir Z
   return new Date(value.replace(' ', 'T') + 'Z');
+}
+
+/** "2024-11-01" en la zona horaria de la app — útil para comparar contra un <input type="date"> */
+export function toLocalDateKey(value: Date | string | null | undefined): string {
+  return parseMySQL(value).toLocaleDateString('en-CA', { timeZone: TZ });
 }
 
 // ─── Funciones de formato ─────────────────────────────────────────────────────

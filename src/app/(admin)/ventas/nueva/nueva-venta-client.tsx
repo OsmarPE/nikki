@@ -2,7 +2,6 @@
 
 import { useState, useTransition, useCallback } from 'react';
 import { useForm } from 'react-hook-form';
-import { zodResolver } from '@hookform/resolvers/zod';
 import { toast } from 'sonner';
 import { useRouter } from 'next/navigation';
 import {
@@ -25,7 +24,7 @@ import { calcularCarrito } from '@/lib/promocion';
 import { procesarVenta } from '@/actions/ventas';
 import { crearCliente, buscarClientes } from '@/actions/clientes';
 import { buscarProductosPOS } from '@/actions/productos';
-import { clienteSchema, type ClienteFormValues } from '@/lib/validations';
+import { zodResolver, clienteSchema, type ClienteFormValues } from '@/lib/validations';
 import type { Producto, Cliente } from '@/types';
 
 // ─── Tipos locales ─────────────────────────────────────────────────────────────

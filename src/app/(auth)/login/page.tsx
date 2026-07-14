@@ -42,7 +42,7 @@ export default function LoginPage() {
           {state?.error && (
             <p className="text-sm text-red-500 bg-red-50 px-3 py-2 rounded-md">{state.error}</p>
           )}
-          <Button type="submit" variant={'default'} size={'lg'} className="w-full mt-4" disabled={pending}>
+          <Button type="submit" variant={'default'} size={'lg'} className="w-full mt-4 h-10" disabled={pending}>
             {pending ? 'Cargando...' : 'Iniciar sesión'}
           </Button>
         </form>

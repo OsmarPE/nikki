@@ -3,10 +3,9 @@
 import { reload } from '@/hooks/use-reload';
 import { useState, useTransition, useMemo, useCallback } from 'react';
 import { useForm } from 'react-hook-form';
-import { zodResolver } from '@hookform/resolvers/zod';
 import { toast } from 'sonner';
 import { ColumnDef } from '@tanstack/react-table';
-import { MoreHorizontalIcon, PencilIcon, Trash2Icon, ArchiveRestoreIcon, Layers2, Plus } from 'lucide-react';
+import { MoreHorizontalIcon, PencilIcon, Trash2Icon, ArchiveRestoreIcon, Archive, Layers2, Plus } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuLabel } from '@/components/ui/dropdown-menu';
@@ -15,7 +14,7 @@ import { DataTable } from '@/components/ui/data-table';
 import { ConfirmDialog } from '@/components/ui/confirm-dialog';
 import { FormField } from '@/components/ui/form-field';
 import { Text } from '@/components/ui/text';
-import { catalogoNombreSchema, type CatalogoNombreValues } from '@/lib/validations';
+import { zodResolver, catalogoNombreSchema, type CatalogoNombreValues } from '@/lib/validations';
 import { crearColeccion, actualizarColeccion, eliminarColeccionLogico, restaurarColeccion } from '@/actions/catalogos';
 import type { Coleccion } from '@/types';
 
@@ -64,11 +63,15 @@ function ColeccionForm({
 // ─── Componente principal ─────────────────────────────────────────────────────
 export default function ColeccionesClient({ items: initial }: { items: Coleccion[] }) {
   const [items] = useState(initial);
+  const [verTodas, setVerTodas] = useState(false);
   const [confirmOpen, setConfirmOpen] = useState(false);
   const [confirmTarget, setConfirmTarget] = useState<Coleccion | null>(null);
   const [blockedMsg, setBlockedMsg] = useState<string | undefined>();
   const [sheet, setSheet] = useState<{ modo: 'crear' | 'editar'; id?: number; nombre?: string } | null>(null);
   const [pending, startTransition] = useTransition();
+
+  const archivadasCount = items.filter(i => i.deleted_at).length;
+  const itemsVisibles = verTodas ? items : items.filter(i => !i.deleted_at);
 
   function abrirCrear() { setSheet({ modo: 'crear' }); }
   function abrirEditar(c: Coleccion) { setSheet({ modo: 'editar', id: c.id, nombre: c.nombre }); }
@@ -169,13 +172,24 @@ export default function ColeccionesClient({ items: initial }: { items: Coleccion
           <Text as="h2" variant="title">Colecciones</Text>
           <Text variant="description">Administra las colecciones de temporada</Text>
         </div>
-        <Button size="sm" onClick={abrirCrear} variant={'outline'}>
-          <Plus size={14} className="mr-1.5" />
-          Nueva colección
-        </Button>
+        <div className="flex items-center gap-2">
+          <Button size="sm" variant="ghost" onClick={() => setVerTodas(v => !v)}>
+            <Archive size={14} className="mr-1.5" />
+            {verTodas ? 'Ver solo activas' : `Ver todas${archivadasCount > 0 ? ` (${archivadasCount} archivadas)` : ''}`}
+          </Button>
+          <Button size="sm" onClick={abrirCrear} variant={'outline'}>
+            <Plus size={14} className="mr-1.5" />
+            Nueva colección
+          </Button>
+        </div>
       </div>
 
-      <DataTable columns={columns} data={items} emptyMessage="Sin colecciones." pageSize={15} />
+      <DataTable
+        columns={columns}
+        data={itemsVisibles}
+        emptyMessage={verTodas ? 'Sin colecciones.' : 'Sin colecciones activas.'}
+        pageSize={20}
+      />
 
       <ConfirmDialog
         open={confirmOpen}

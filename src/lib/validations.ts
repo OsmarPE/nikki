@@ -1,4 +1,16 @@
 import { z } from 'zod';
+import { zodResolver as baseZodResolver } from '@hookform/resolvers/zod';
+import type { FieldValues, Resolver } from 'react-hook-form';
+
+// @hookform/resolvers@5.4.0 fue publicado con tipos compilados contra
+// zod@4.0.x exactamente (su firma exige la versión menor "0" en un tipo
+// interno de zod). Usamos zod@4.4.x porque versiones 4.0.x tienen un bug de
+// inferencia en z.coerce.number(). El resolver funciona bien en runtime con
+// cualquier zod 4.x — el choque es solo a nivel de tipos — así que
+// centralizamos el cast aquí en vez de repetirlo en cada formulario.
+export function zodResolver<T extends FieldValues>(schema: z.ZodType<T, unknown>): Resolver<T> {
+  return baseZodResolver(schema as never) as unknown as Resolver<T>;
+}
 
 // ─── Cliente ──────────────────────────────────────────────────────────────────
 export const clienteSchema = z.object({

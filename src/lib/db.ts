@@ -11,8 +11,44 @@ declare global {
   var _mysqlPool: mysql.Pool | undefined;
 }
 
+// El host remoto de Hostinger falla de forma intermitente al abrir conexiones
+// nuevas (ETIMEDOUT / ENETUNREACH), incluso con la red del servidor en buen
+// estado. Estos códigos son transitorios: reintentar una vez basta.
+const RETRYABLE_CODES = new Set([
+  'ETIMEDOUT',
+  'ECONNRESET',
+  'ECONNREFUSED',
+  'ENETUNREACH',
+  'PROTOCOL_CONNECTION_LOST',
+]);
+
+function isRetryable(err: unknown): boolean {
+  const e = err as { code?: string; errors?: Array<{ code?: string }> };
+  const code = e?.code ?? e?.errors?.[0]?.code;
+  return code != null && RETRYABLE_CODES.has(code);
+}
+
+function withConnectionRetry(rawPool: mysql.Pool): mysql.Pool {
+  return new Proxy(rawPool, {
+    get(target, prop, receiver) {
+      if (prop === 'query' || prop === 'execute') {
+        const original = (Reflect.get(target, prop, target) as (...a: unknown[]) => Promise<unknown>).bind(target);
+        return async (...args: unknown[]) => {
+          try {
+            return await original(...args);
+          } catch (err) {
+            if (!isRetryable(err)) throw err;
+            return await original(...args);
+          }
+        };
+      }
+      return Reflect.get(target, prop, receiver);
+    },
+  }) as mysql.Pool;
+}
+
 function createPool() {
-  return mysql.createPool({
+  return withConnectionRetry(mysql.createPool({
     host:               process.env.DB_HOST     || 'localhost',
     port:               Number(process.env.DB_PORT) || 3306,
     user:               process.env.DB_USER     || 'root',
@@ -22,7 +58,8 @@ function createPool() {
     connectionLimit:    10,
     queueLimit:         0,
     timezone:           '+00:00',
-  });
+    connectTimeout:     20000, // el host remoto de Hostinger a veces tarda en responder
+  }));
 }
 
 const pool: mysql.Pool =

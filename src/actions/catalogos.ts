@@ -14,6 +14,16 @@ export async function getCategorias(): Promise<Categoria[]> {
   return rows as Categoria[];
 }
 
+export async function verificarUsoCategoria(id: number): Promise<{ productos: number }> {
+  const session = await getSession();
+  if (!session || session.rol !== 'admin') return { productos: 0 };
+
+  const [rows] = await pool.query<RowDataPacket[]>(
+    'SELECT COUNT(*) AS total FROM productos WHERE categoria_id = ?', [id]
+  );
+  return { productos: Number((rows[0] as RowDataPacket).total ?? 0) };
+}
+
 export async function crearCategoria(nombre: string) {
   const session = await getSession();
   if (!session || session.rol !== 'admin') return { error: 'Sin permiso.' };
@@ -62,6 +72,16 @@ export async function getMarcas(): Promise<Marca[]> {
     'SELECT id, nombre FROM marcas ORDER BY nombre ASC'
   );
   return rows as Marca[];
+}
+
+export async function verificarUsoMarca(id: number): Promise<{ productos: number }> {
+  const session = await getSession();
+  if (!session || session.rol !== 'admin') return { productos: 0 };
+
+  const [rows] = await pool.query<RowDataPacket[]>(
+    'SELECT COUNT(*) AS total FROM productos WHERE marca_id = ?', [id]
+  );
+  return { productos: Number((rows[0] as RowDataPacket).total ?? 0) };
 }
 
 export async function crearMarca(nombre: string) {

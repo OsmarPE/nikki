@@ -1,8 +1,7 @@
 'use client';
 
-import { useState, useTransition, useCallback } from 'react';
+import { useState, useEffect, useTransition, useCallback } from 'react';
 import { useForm } from 'react-hook-form';
-import { zodResolver } from '@hookform/resolvers/zod';
 import { toast } from 'sonner';
 import { useRouter } from 'next/navigation';
 import {
@@ -18,14 +17,16 @@ import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
 import { Separator } from '@/components/ui/separator';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { Dialog as DialogPrimitive } from '@base-ui/react/dialog';
 import { FormField } from '@/components/ui/form-field';
+import { PaginationControls } from '@/components/ui/pagination-controls';
 import { cn } from '@/lib/utils';
 import { formatCurrency } from '@/lib/utils';
 import { calcularCarrito } from '@/lib/promocion';
 import { procesarVenta } from '@/actions/ventas';
 import { crearCliente, buscarClientes } from '@/actions/clientes';
-import { buscarProductosPOS } from '@/actions/productos';
-import { clienteSchema, type ClienteFormValues } from '@/lib/validations';
+import { listarProductosPOS } from '@/actions/productos';
+import { zodResolver, clienteSchema, type ClienteFormValues } from '@/lib/validations';
 import type { Producto, Cliente } from '@/types';
 
 // ─── Tipos locales ─────────────────────────────────────────────────────────────
@@ -171,8 +172,11 @@ function PasoProductos({
                     <Minus size={11} />
                   </button>
                   <span className="w-6 text-center text-sm font-semibold tabular-nums">{item.cantidad}</span>
-                  <button onClick={() => onCantidad(item.producto.id, 1)}
-                    className="h-6 w-6 rounded-md border border-border flex items-center justify-center hover:bg-muted transition-colors">
+                  <button
+                    onClick={() => onCantidad(item.producto.id, 1)}
+                    disabled={item.cantidad >= Number(item.producto.stock ?? 0)}
+                    className="h-6 w-6 rounded-md border border-border flex items-center justify-center hover:bg-muted transition-colors disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:bg-transparent"
+                  >
                     <Plus size={11} />
                   </button>
                 </div>
@@ -285,8 +289,7 @@ function PasoCliente({
               )}
               <div className="border-t border-border/60 p-2">
                 <button onClick={onNuevo}
-                  className="w-full flex items-center justify-center gap-1.5 rounded-md px-3 py-1.5 text-xs font-medium text-muted-foreground hover:text-foreground hover:bg-muted transition-colors">
-                  <UserPlus size={12} />
+                  className="w-full flex items-center justify-center gap-1.5 rounded-md px-3 py-1.5 text-xs font-medium text-foreground hover:underline transition-colors">
                   Registrar nuevo cliente
                 </button>
               </div>
@@ -302,8 +305,7 @@ function PasoCliente({
                 <p className="text-xs text-muted-foreground/60 mt-0.5">Se registrará como público general</p>
               </div>
               <button onClick={onNuevo}
-                className="mt-1 inline-flex items-center gap-1.5 text-xs font-medium text-foreground/60 hover:text-foreground transition-colors">
-                <UserPlus size={12} />
+                className="mt-1 inline-flex items-center gap-1.5 text-xs font-medium text-foreground/60 hover:text-foreground  hover:underline transition-colors">
                 Registrar nuevo cliente
               </button>
             </div>
@@ -654,7 +656,72 @@ function NuevoClienteModal({
   );
 }
 
+// ─── Tarjeta de producto (grilla del buscador) ─────────────────────────────────
+function TarjetaProducto({ p, onClick }: { p: Producto; onClick: () => void }) {
+  const precio = p.precio_descuento ?? p.precio;
+  const stock  = Number(p.stock ?? 0);
+  const sinStock = stock <= 0;
+  return (
+    <button
+      onClick={onClick}
+      disabled={sinStock}
+      className={cn(
+        'group flex flex-col text-left rounded-xl border border-border bg-background overflow-hidden transition-all',
+        sinStock
+          ? 'opacity-50 cursor-not-allowed'
+          : 'hover:border-foreground/30 hover:shadow-md cursor-pointer',
+      )}
+    >
+      {/* Imagen */}
+      <div className="relative aspect-square w-full bg-muted overflow-hidden">
+        {p.imagen_url ? (
+          // eslint-disable-next-line @next/next/no-img-element
+          <img
+            src={p.imagen_url}
+            alt={p.nombre}
+            className="w-full h-full object-cover transition-transform group-hover:scale-105"
+          />
+        ) : (
+          <div className="w-full h-full flex items-center justify-center">
+            <Package size={28} className="text-muted-foreground/40" />
+          </div>
+        )}
+        <Badge
+          variant={sinStock ? 'destructive' : 'outline'}
+          className={cn(
+            'absolute top-2 right-2 text-[10px] h-5 px-1.5 shadow-sm',
+            !sinStock && 'bg-background/90 backdrop-blur-sm',
+          )}
+        >
+          {sinStock ? 'Sin stock' : `${stock} disp.`}
+        </Badge>
+        {p.precio_descuento != null && (
+          <Badge className="absolute top-2 left-2 text-[10px] h-5 px-1.5 bg-green-600 text-white border-transparent shadow-sm">
+            Oferta
+          </Badge>
+        )}
+      </div>
+
+      {/* Info */}
+      <div className="flex-1 flex flex-col gap-1 px-3 py-2.5">
+        <p className="text-sm font-medium leading-snug line-clamp-2 min-h-[2.5em]">{p.nombre}</p>
+        <span className="text-[11px] font-mono text-muted-foreground">{p.sku}</span>
+        <div className="mt-auto pt-1 flex items-baseline gap-1.5">
+          <span className="text-base font-bold tabular-nums">{formatCurrency(precio)}</span>
+          {p.precio_descuento != null && (
+            <span className="text-[11px] text-muted-foreground line-through tabular-nums">
+              {formatCurrency(p.precio)}
+            </span>
+          )}
+        </div>
+      </div>
+    </button>
+  );
+}
+
 // ─── Modal buscador de productos ───────────────────────────────────────────────
+const PRODUCTOS_POR_PAGINA = 15;
+
 function BuscadorProductos({
   open, onClose, onAgregar,
 }: {
@@ -662,110 +729,130 @@ function BuscadorProductos({
   onClose: () => void;
   onAgregar: (p: Producto) => void;
 }) {
-  const [query, setQuery]         = useState('');
-  const [resultados, setResultados] = useState<Producto[]>([]);
-  const [buscando, setBuscando]   = useState(false);
+  const [query, setQuery]     = useState('');
+  const [page, setPage]       = useState(0); // 0-indexed, para PaginationControls
+  const [items, setItems]     = useState<Producto[]>([]);
+  const [total, setTotal]     = useState(0);
+  const [buscando, setBuscando] = useState(false);
 
-  const buscar = useCallback(async (q: string) => {
-    if (q.trim().length < 1) { setResultados([]); return; }
+  const cargar = useCallback(async (q: string, p: number) => {
     setBuscando(true);
-    const r = await buscarProductosPOS(q);
-    setResultados(r);
+    const r = await listarProductosPOS(q, p + 1, PRODUCTOS_POR_PAGINA);
+    setItems(r.items);
+    setTotal(r.total);
     setBuscando(false);
   }, []);
 
+  // Carga la lista al abrir el modal, al cambiar de página, y (con un pequeño
+  // debounce) al escribir en el buscador — así siempre hay algo que elegir,
+  // con o sin texto de búsqueda.
+  useEffect(() => {
+    if (!open) return;
+    const t = setTimeout(() => cargar(query, page), query ? 250 : 0);
+    return () => clearTimeout(t);
+  }, [open, query, page, cargar]);
+
   function handleQuery(q: string) {
     setQuery(q);
-    buscar(q);
+    setPage(0);
   }
 
   function seleccionar(p: Producto) {
     onAgregar(p);
     setQuery('');
-    setResultados([]);
+    setPage(0);
   }
 
+  const totalPages = Math.max(1, Math.ceil(total / PRODUCTOS_POR_PAGINA));
+
   return (
-    <Dialog open={open} onOpenChange={v => { if (!v) { setQuery(''); setResultados([]); onClose(); } }}>
-      <DialogContent className="max-w-lg p-0 gap-0 overflow-hidden">
-        <DialogHeader className="px-4 pt-4 pb-3 border-b border-border/60">
-          <DialogTitle className="text-sm font-semibold">Buscar producto</DialogTitle>
-        </DialogHeader>
-
-        {/* Search */}
-        <div className="px-4 pt-3 pb-2">
-          <div className="relative">
-            <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
-            <Input
-              autoFocus
-              placeholder="Nombre o SKU del producto…"
-              value={query}
-              onChange={e => handleQuery(e.target.value)}
-              className="pl-8"
-            />
+    <DialogPrimitive.Root open={open} onOpenChange={v => { if (!v) { setQuery(''); setPage(0); onClose(); } }}>
+      <DialogPrimitive.Portal>
+        <DialogPrimitive.Backdrop className="fixed inset-0 z-50 bg-black/30 backdrop-blur-sm duration-100 data-open:animate-in data-open:fade-in-0 data-closed:animate-out data-closed:fade-out-0" />
+        <DialogPrimitive.Popup
+          className={cn(
+            'fixed top-1/2 left-1/2 z-50 -translate-x-1/2 -translate-y-1/2',
+            'w-[96vw] max-w-[1000px] max-h-[85vh]',
+            'flex flex-col overflow-hidden rounded-2xl bg-popover text-popover-foreground shadow-2xl ring-1 ring-foreground/10 outline-none',
+            'duration-100 data-open:animate-in data-open:fade-in-0 data-open:zoom-in-95 data-closed:animate-out data-closed:fade-out-0 data-closed:zoom-out-95',
+          )}
+        >
+          {/* Header */}
+          <div className="flex items-start justify-between gap-4 px-6 pt-6 pb-4 border-b border-border/60 shrink-0">
+            <div className="flex-1 min-w-0">
+              <DialogPrimitive.Title className="text-lg font-semibold">Agregar producto</DialogPrimitive.Title>
+              <p className="text-xs text-muted-foreground mt-0.5">
+                Busca por nombre o SKU, o navega el catálogo completo
+              </p>
+              <div className="relative mt-3 max-w-md">
+                <Search size={16} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-muted-foreground" />
+                <Input
+                  autoFocus
+                  placeholder="Nombre o SKU del producto…"
+                  value={query}
+                  onChange={e => handleQuery(e.target.value)}
+                  className="pl-10 h-11 text-base"
+                />
+              </div>
+            </div>
+            <DialogPrimitive.Close
+              render={<Button variant="ghost" size="icon" className="shrink-0" />}
+            >
+              <X size={16} />
+              <span className="sr-only">Cerrar</span>
+            </DialogPrimitive.Close>
           </div>
-        </div>
 
-        {/* Results */}
-        <div className="max-h-72 overflow-y-auto divide-y divide-border/50 pb-2">
-          {buscando && (
-            <div className="px-4 py-6 text-center text-xs text-muted-foreground">Buscando…</div>
-          )}
-          {!buscando && query.length >= 1 && resultados.length === 0 && (
-            <div className="px-4 py-8 text-center text-xs text-muted-foreground">
-              Sin resultados para "{query}"
+          {/* Resultados */}
+          <div className="flex-1 overflow-y-auto px-6 py-5 bg-muted/10">
+            {buscando ? (
+              <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 xl:grid-cols-5 gap-4">
+                {Array.from({ length: 8 }).map((_, i) => (
+                  <div key={i} className="rounded-xl border border-border overflow-hidden animate-pulse">
+                    <div className="aspect-square bg-muted" />
+                    <div className="px-3 py-2.5 space-y-2">
+                      <div className="h-3 bg-muted rounded w-4/5" />
+                      <div className="h-3 bg-muted rounded w-2/5" />
+                      <div className="h-4 bg-muted rounded w-1/2 mt-1" />
+                    </div>
+                  </div>
+                ))}
+              </div>
+            ) : items.length === 0 ? (
+              <div className="h-full flex flex-col items-center justify-center gap-2 text-muted-foreground">
+                <Package size={36} className="opacity-30" />
+                <p className="text-sm font-medium">
+                  {query ? `Sin resultados para "${query}"` : 'No hay productos en el catálogo'}
+                </p>
+                {query && <p className="text-xs text-muted-foreground/70">Intenta con otro nombre o SKU</p>}
+              </div>
+            ) : (
+              <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-4">
+                {items.map(p => (
+                  <TarjetaProducto key={p.id} p={p} onClick={() => seleccionar(p)} />
+                ))}
+              </div>
+            )}
+          </div>
+
+          {/* Paginación */}
+          {totalPages > 1 && (
+            <div className="px-6 py-3.5 border-t border-border/60 shrink-0">
+              <PaginationControls
+                page={page}
+                totalPages={totalPages}
+                total={total}
+                pageSize={PRODUCTOS_POR_PAGINA}
+                hasPrev={page > 0}
+                hasNext={page < totalPages - 1}
+                onPrev={() => setPage(p => Math.max(0, p - 1))}
+                onNext={() => setPage(p => Math.min(totalPages - 1, p + 1))}
+              />
             </div>
           )}
-          {!buscando && query.length < 1 && (
-            <div className="px-4 py-8 text-center text-xs text-muted-foreground">
-              Escribe para buscar productos
-            </div>
-          )}
-          {resultados.map(p => {
-            const precio = p.precio_descuento ?? p.precio;
-            const stock  = Number(p.stock ?? 0);
-            return (
-              <button
-                key={p.id}
-                onClick={() => seleccionar(p)}
-                disabled={stock <= 0}
-                className="w-full flex items-center gap-3 px-4 py-3 text-left hover:bg-muted/50 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
-              >
-                {p.imagen_url ? (
-                  // eslint-disable-next-line @next/next/no-img-element
-                  <img src={p.imagen_url} alt={p.nombre}
-                    className="h-9 w-9 rounded-md object-cover shrink-0" />
-                ) : (
-                  <div className="h-9 w-9 rounded-md bg-muted flex items-center justify-center shrink-0">
-                    <Package size={14} className="text-muted-foreground" />
-                  </div>
-                )}
-                <div className="flex-1 min-w-0">
-                  <p className="text-sm font-medium truncate">{p.nombre}</p>
-                  <div className="flex items-center gap-1.5 mt-0.5">
-                    <span className="text-[11px] font-mono text-muted-foreground">{p.sku}</span>
-                    <Badge
-                      variant={stock > 0 ? 'outline' : 'destructive'}
-                      className="text-[10px] h-4 px-1"
-                    >
-                      {stock > 0 ? `${stock} disp.` : 'Sin stock'}
-                    </Badge>
-                  </div>
-                </div>
-                <div className="text-right shrink-0">
-                  <p className="text-sm font-semibold tabular-nums">{formatCurrency(precio)}</p>
-                  {p.precio_descuento && (
-                    <p className="text-[11px] text-muted-foreground line-through tabular-nums">
-                      {formatCurrency(p.precio)}
-                    </p>
-                  )}
-                </div>
-              </button>
-            );
-          })}
-        </div>
-      </DialogContent>
-    </Dialog>
+        </DialogPrimitive.Popup>
+      </DialogPrimitive.Portal>
+    </DialogPrimitive.Root>
   );
 }
 
@@ -801,12 +888,21 @@ export default function NuevaVentaClient({
 
   // ── Carrito ────────────────────────────────────────────────────────────────
   function agregarProducto(p: Producto) {
+    const stock = Number(p.stock ?? 0);
     setLineas(prev => {
       const idx = prev.findIndex(l => l.producto.id === p.id);
       if (idx >= 0) {
+        if (prev[idx].cantidad >= stock) {
+          toast.error(`Solo hay ${stock} disponibles de "${p.nombre}".`);
+          return prev;
+        }
         const next = [...prev];
         next[idx] = { ...next[idx], cantidad: next[idx].cantidad + 1 };
         return next;
+      }
+      if (stock <= 0) {
+        toast.error(`"${p.nombre}" no tiene stock disponible.`);
+        return prev;
       }
       return [...prev, { producto: p, cantidad: 1 }];
     });
@@ -814,10 +910,16 @@ export default function NuevaVentaClient({
 
   function cambiarCantidad(id: number, delta: number) {
     setLineas(prev =>
-      prev.map(l => l.producto.id === id
-        ? { ...l, cantidad: Math.max(1, l.cantidad + delta) }
-        : l
-      )
+      prev.map(l => {
+        if (l.producto.id !== id) return l;
+        const stock = Number(l.producto.stock ?? 0);
+        const nueva = l.cantidad + delta;
+        if (delta > 0 && nueva > stock) {
+          toast.error(`Solo hay ${stock} disponibles de "${l.producto.nombre}".`);
+          return l;
+        }
+        return { ...l, cantidad: Math.max(1, nueva) };
+      })
     );
   }
 

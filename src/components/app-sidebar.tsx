@@ -51,6 +51,16 @@ interface AppSidebarProps {
 export function AppSidebar({ nombre }: AppSidebarProps) {
   const pathname = usePathname();
 
+  // El item activo es el de href más específico que coincide con la ruta actual,
+  // para que rutas hermanas con prefijo compartido (ej. /ventas y /ventas/nueva)
+  // no queden ambas resaltadas a la vez.
+  const activeHref = NAV.reduce<string | null>((best, { href }) => {
+    const matches = pathname === href || pathname.startsWith(href + '/');
+    if (!matches) return best;
+    if (!best || href.length > best.length) return href;
+    return best;
+  }, null);
+
   return (
     <Sidebar collapsible="icon">
       <SidebarHeader>
@@ -78,7 +88,7 @@ export function AppSidebar({ nombre }: AppSidebarProps) {
               {NAV.map(({ href, label, icon: Icon }) => (
                 <SidebarMenuItem key={href}>
                   <SidebarMenuButton
-                    isActive={pathname === href || pathname.startsWith(href + '/')}
+                    isActive={href === activeHref}
                     tooltip={label}
                   >
                     <Link href={href} className="flex items-center gap-2 text-sm flex-1">

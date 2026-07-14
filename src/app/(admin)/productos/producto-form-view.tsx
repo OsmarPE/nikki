@@ -3,7 +3,6 @@
 
 import { useState, useTransition } from 'react';
 import { useForm, Controller } from 'react-hook-form';
-import { zodResolver } from '@hookform/resolvers/zod';
 import { toast } from 'sonner';
 import { useRouter } from 'next/navigation';
 import {
@@ -19,7 +18,7 @@ import { FormField, TextareaField, FieldGroup } from '@/components/ui/form-field
 import { ImageUpload } from '@/components/ui/image-upload';
 import { crearProducto, actualizarProducto, eliminarProducto } from '@/actions/productos';
 import { formatCurrency, formatDate } from '@/lib/utils';
-import { productoSchema, type ProductoFormValues } from '@/lib/validations';
+import { zodResolver, productoSchema, type ProductoFormValues } from '@/lib/validations';
 import type { Producto, Categoria, Marca, Coleccion, MovimientoInventario } from '@/types';
 
 interface Props {
@@ -322,14 +321,18 @@ export default function ProductoFormView({
                   name={name}
                   control={control}
                   render={({ field }) => (
-                    <Select value={field.value ?? ''} onValueChange={field.onChange}>
+                    <Select
+                      items={{ '': placeholder, ...Object.fromEntries(items.map(i => [String(i.id), i.nombre])) }}
+                      value={field.value ?? ''}
+                      onValueChange={field.onChange}
+                    >
                       <SelectTrigger className="h-8 text-sm w-full">
                         <SelectValue placeholder={placeholder} />
                       </SelectTrigger>
                       <SelectContent>
-                        <SelectItem value="">{placeholder}</SelectItem>
+                        <SelectItem value="" label={placeholder}>{placeholder}</SelectItem>
                         {items.map(i => (
-                          <SelectItem key={i.id} value={String(i.id)}>{i.nombre}</SelectItem>
+                          <SelectItem key={i.id} value={String(i.id)} label={i.nombre}>{i.nombre}</SelectItem>
                         ))}
                       </SelectContent>
                     </Select>

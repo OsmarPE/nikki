@@ -3,7 +3,6 @@
 import { reload } from '@/hooks/use-reload';
 import { useState, useTransition, useMemo, useCallback } from 'react';
 import { useForm } from 'react-hook-form';
-import { zodResolver } from '@hookform/resolvers/zod';
 import { toast } from 'sonner';
 import { ColumnDef } from '@tanstack/react-table';
 import { MoreHorizontalIcon, PencilIcon, Trash2Icon, Plus, Tag } from 'lucide-react';
@@ -14,7 +13,7 @@ import { DataTable } from '@/components/ui/data-table';
 import { ConfirmDialog } from '@/components/ui/confirm-dialog';
 import { FormField } from '@/components/ui/form-field';
 import { Text } from '@/components/ui/text';
-import { catalogoNombreSchema, type CatalogoNombreValues } from '@/lib/validations';
+import { zodResolver, catalogoNombreSchema, type CatalogoNombreValues } from '@/lib/validations';
 import { Card, CardContent } from '../ui/card';
 
 interface Item { id: number; nombre: string }
@@ -24,7 +23,8 @@ interface Props {
   items: Item[];
   onCreate: (nombre: string) => Promise<{ success?: boolean; error?: string } | undefined>;
   onUpdate: (id: number, nombre: string) => Promise<{ success?: boolean; error?: string } | undefined>;
-  onDelete: (id: number) => Promise<{ success?: boolean; error?: string } | undefined>;
+  onDelete: (id: number) => Promise<{ success?: boolean; error?: string; blocked?: boolean } | undefined>;
+  onCheckUso: (id: number) => Promise<{ productos: number }>;
 }
 
 // ─── Formulario dentro del Sheet ─────────────────────────────────────────────
@@ -73,12 +73,13 @@ function CatalogoForm({
 }
 
 // ─── Componente principal ─────────────────────────────────────────────────────
-export default function CatalogoSimpleClient({ titulo, items: initial, onCreate, onUpdate, onDelete }: Props) {
+export default function CatalogoSimpleClient({ titulo, items: initial, onCreate, onUpdate, onDelete, onCheckUso }: Props) {
   const [items] = useState(initial);
   const [sheet, setSheet] = useState<{ modo: 'crear' | 'editar'; id?: number; nombre?: string } | null>(null);
   const [confirmOpen, setConfirmOpen] = useState(false);
   const [confirmTarget, setConfirmTarget] = useState<Item | null>(null);
   const [blockedMsg, setBlockedMsg] = useState<string | undefined>();
+  const [usoCount, setUsoCount] = useState<number | null>(null);
   const [pending, startTransition] = useTransition();
 
   const singular = titulo.slice(0, -1).toLowerCase();
@@ -105,7 +106,10 @@ export default function CatalogoSimpleClient({ titulo, items: initial, onCreate,
 
   function pedirEliminar(item: Item) {
     setConfirmTarget(item);
+    setBlockedMsg(undefined);
+    setUsoCount(null);
     setConfirmOpen(true);
+    onCheckUso(item.id).then(r => setUsoCount(r.productos));
   }
 
   const handleEliminar = useCallback(() => {
@@ -177,22 +181,22 @@ export default function CatalogoSimpleClient({ titulo, items: initial, onCreate,
         columns={columns}
         data={items}
         emptyMessage={`Sin ${titulo.toLowerCase()}.`}
-        pageSize={15}
+        pageSize={20}
       />
 
 
       <ConfirmDialog
         open={confirmOpen}
-        onOpenChange={open => { setConfirmOpen(open); if (!open) { setConfirmTarget(null); setBlockedMsg(undefined); } }}
+        onOpenChange={open => { setConfirmOpen(open); if (!open) { setConfirmTarget(null); setBlockedMsg(undefined); setUsoCount(null); } }}
         title={`Eliminar ${singular}`}
         description={`¿Seguro que quieres eliminar "${confirmTarget?.nombre}"? No podrás recuperarlo después.`}
-        blocked={blockedMsg}
-        warning={!blockedMsg ? (
-          titulo === 'Categorías'
-            ? 'Ningún producto está usando esta categoría. Puedes eliminarla sin problema.'
-            : titulo === 'Marcas'
-            ? 'Ningún producto está usando esta marca. Puedes eliminarla sin problema.'
-            : undefined
+        blocked={blockedMsg ?? (usoCount && usoCount > 0
+          ? `No se puede eliminar: ${usoCount} ${usoCount === 1 ? `producto usa` : `productos usan`} esta ${singular}. Reasígnalos primero.`
+          : undefined)}
+        warning={!blockedMsg && !usoCount ? (
+          usoCount === null
+            ? 'Verificando uso…'
+            : `Ningún producto está usando esta ${singular}. Puedes eliminarla sin problema.`
         ) : undefined}
         confirmLabel={`Eliminar ${singular}`}
         onConfirm={handleEliminar}
