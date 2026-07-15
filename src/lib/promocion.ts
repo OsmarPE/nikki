@@ -5,77 +5,81 @@ interface LineaCarrito {
   cantidad: number;
 }
 
-/**
- * Aplica la promoción global: 20% sobre las M unidades de menor precio
- * cuando hay 4 o más unidades elegibles en el carrito.
- *
- * Elegible: marca distinta de "nikkol" Y precio_descuento nulo/cero.
- */
-export function calcularCarrito(lineas: LineaCarrito[]): ResultadoCarrito {
-  // Expandir cada línea en unidades individuales
-  const unidades: { producto: Producto; precio: number }[] = [];
-  for (const linea of lineas) {
-    for (let i = 0; i < linea.cantidad; i++) {
-      unidades.push({ producto: linea.producto, precio: linea.producto.precio });
-    }
-  }
+export interface CandidatoDescuento {
+  producto_id: number;
+  nombre: string;
+  cantidad: number;
+}
 
-  // Separar elegibles (no nikkol, sin precio_descuento)
-  const elegibles = unidades.filter(
-    u =>
-      u.producto.marca_nombre?.toLowerCase() !== 'nikkol' &&
-      (!u.producto.precio_descuento || u.producto.precio_descuento === 0)
+function esElegibleParaPromocion(producto: Producto): boolean {
+  return (
+    producto.marca_nombre?.toLowerCase() !== 'nikkol' &&
+    (!producto.precio_descuento || producto.precio_descuento === 0)
   );
+}
 
-  const N = elegibles.length;
-  let unidadesConDescuento = new Set<number>(); // índices globales en `elegibles` que recibirán 20%
+/** Suma de TODAS las unidades del carrito, elegibles o no — cualquier pieza
+ * comprada cuenta para llegar a la 4ta, sin importar marca o si ya tiene
+ * precio_descuento propio. Esa elegibilidad solo decide dónde se puede
+ * "gastar" el 20% una vez que se llega al umbral, no si la pieza cuenta. */
+function totalUnidadesCarrito(lineas: LineaCarrito[]): number {
+  return lineas.reduce((s, l) => s + l.cantidad, 0);
+}
 
-  if (N >= 4) {
-    const M = N - 3;
-    // Ordenar elegibles por precio ascendente; guardar índice original
-    const conIndice = elegibles.map((u, i) => ({ ...u, idx: i }));
-    conIndice.sort((a, b) => a.precio - b.precio);
-    // Las primeras M reciben el 20%
-    for (let i = 0; i < M; i++) {
-      unidadesConDescuento.add(conIndice[i].idx);
-    }
-  }
+/**
+ * Líneas elegibles para que el vendedor les asigne el 20% de descuento. Solo
+ * hay algo que ofrecer cuando el carrito acumula 4+ piezas EN TOTAL (de
+ * cualquier producto, elegible o no); las líneas devueltas son las que sí
+ * pueden recibir el descuento (marca distinta de "nikkol", sin
+ * precio_descuento propio).
+ */
+export function calcularCandidatosDescuento(lineas: LineaCarrito[]): CandidatoDescuento[] {
+  if (totalUnidadesCarrito(lineas) < 4) return [];
+  return lineas
+    .filter(l => esElegibleParaPromocion(l.producto))
+    .map(l => ({
+      producto_id: l.producto.id,
+      nombre:      l.producto.nombre,
+      cantidad:    l.cantidad,
+    }));
+}
 
-  // Reconstruir items del carrito con descuentos
-  let elegibleIdx = 0;
+/**
+ * A partir de la 4ta pieza del carrito (sumando TODOS los productos, incluida
+ * marca "nikkol" y los que ya tienen precio_descuento propio), las unidades
+ * excedentes (total del carrito - 3) reciben 20% de descuento. El vendedor
+ * decide en cuáles productos ELEGIBLES se "gastan" esas unidades marcándolos
+ * en `productosConDescuento` — se reparten en el orden en que aparecen las
+ * líneas del carrito, sin poder superar el total disponible ni aplicar sobre
+ * productos no elegibles (marca "nikkol" o con precio_descuento propio),
+ * aunque esos sí cuentan para alcanzar el umbral.
+ */
+export function calcularCarrito(
+  lineas: LineaCarrito[],
+  productosConDescuento: Set<number> | number[] = new Set(),
+): ResultadoCarrito {
+  const seleccionados = productosConDescuento instanceof Set
+    ? productosConDescuento
+    : new Set(productosConDescuento);
+
+  let poolDescuento = Math.max(0, totalUnidadesCarrito(lineas) - 3);
+
   const items: ItemCarrito[] = [];
   let totalDescuento = 0;
 
   for (const linea of lineas) {
-    let descuentoPorUnidad = 0;
-    let unidadesDescuentoEnLinea = 0;
+    const elegible = esElegibleParaPromocion(linea.producto) && seleccionados.has(linea.producto.id);
+    const unidadesConDescuento = elegible ? Math.min(linea.cantidad, poolDescuento) : 0;
+    poolDescuento -= unidadesConDescuento;
 
-    for (let i = 0; i < linea.cantidad; i++) {
-      const esElegible =
-        linea.producto.marca_nombre?.toLowerCase() !== 'nikkol' &&
-        (!linea.producto.precio_descuento || linea.producto.precio_descuento === 0);
-
-      if (esElegible) {
-        if (unidadesConDescuento.has(elegibleIdx)) {
-          unidadesDescuentoEnLinea++;
-        }
-        elegibleIdx++;
-      }
-    }
-
-    const precioBase = linea.producto.precio_descuento
+    const precioUnitario = linea.producto.precio_descuento
       ? linea.producto.precio_descuento
       : linea.producto.precio;
 
-    // Precio efectivo por unidad considerando descuento del catálogo
-    const precioUnitario = precioBase;
-
-    // El descuento de promoción aplicado al total de la línea
-    const descuentoPromocion = unidadesDescuentoEnLinea * precioUnitario * 0.2;
+    const descuentoPromocion = unidadesConDescuento * precioUnitario * 0.2;
     const subtotalLinea = linea.cantidad * precioUnitario - descuentoPromocion;
 
     totalDescuento += descuentoPromocion;
-    descuentoPorUnidad = linea.cantidad > 0 ? descuentoPromocion / linea.cantidad : 0;
 
     items.push({
       producto:           linea.producto,
@@ -92,6 +96,6 @@ export function calcularCarrito(lineas: LineaCarrito[]): ResultadoCarrito {
     items,
     total:              parseFloat(total.toFixed(2)),
     descuento_total:    parseFloat(totalDescuento.toFixed(2)),
-    promocion_aplicada: unidadesConDescuento.size > 0,
+    promocion_aplicada: totalDescuento > 0,
   };
 }

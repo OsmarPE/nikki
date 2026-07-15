@@ -21,6 +21,7 @@ interface Props {
   categorias: Categoria[];
   marcas: Marca[];
   colecciones: Coleccion[];
+  permisos: { crear: boolean; editar: boolean; eliminar: boolean };
 }
 
 // ─── Miniatura de producto con fallback si no hay imagen o falla al cargar ────
@@ -163,7 +164,7 @@ function ProductosFiltroPanel({
 }
 
 // ─── Componente principal ─────────────────────────────────────────────────────
-export default function ProductosClient({ productos: initial, categorias, marcas, colecciones }: Props) {
+export default function ProductosClient({ productos: initial, categorias, marcas, colecciones, permisos }: Props) {
   const router = useRouter();
   const [productos] = useState(initial);
   const [busqueda, setBusqueda] = useState('');
@@ -259,9 +260,13 @@ export default function ProductosClient({ productos: initial, categorias, marcas
       accessorKey: 'precio', header: 'Precio',
       cell: ({ row }) => (
         <div>
-          <p className="font-medium text-sm">{formatCurrency(row.original.precio)}</p>
-          {row.original.precio_descuento && (
-            <p className="text-[11px] text-green-700">{formatCurrency(row.original.precio_descuento)}</p>
+          {row.original.precio_descuento ? (
+            <>
+              <p className="font-bold text-sm">{formatCurrency(row.original.precio_descuento)}</p>
+              <p className="text-[11px] text-muted-foreground line-through">{formatCurrency(row.original.precio)}</p>
+            </>
+          ) : (
+            <p className="font-medium text-sm">{formatCurrency(row.original.precio)}</p>
           )}
         </div>
       ),
@@ -278,9 +283,9 @@ export default function ProductosClient({ productos: initial, categorias, marcas
       accessorKey: 'marca_nombre', header: 'Marca',
       cell: ({ row }) => <span className="text-sm text-muted-foreground">{row.original.marca_nombre ?? '—'}</span>,
     },
-    {
+    ...(permisos.editar || permisos.eliminar ? [{
       id: 'actions', header: '',
-      cell: ({ row }) => (
+      cell: ({ row }: { row: { original: Producto } }) => (
         <div className="flex justify-end">
           <DropdownMenu>
             <DropdownMenuTrigger render={<Button variant="ghost" size="icon-sm" aria-label="Abrir menú" />}>
@@ -288,19 +293,23 @@ export default function ProductosClient({ productos: initial, categorias, marcas
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end">
               <DropdownMenuLabel>Acciones</DropdownMenuLabel>
-              <DropdownMenuItem onClick={() => router.push(`/productos/${row.original.id}`)}>
-                <PencilIcon /> Editar
-              </DropdownMenuItem>
-              <DropdownMenuSeparator />
-              <DropdownMenuItem variant="destructive" onClick={() => pedirEliminar(row.original.id, row.original.nombre)}>
-                <Trash2Icon /> Eliminar
-              </DropdownMenuItem>
+              {permisos.editar && (
+                <DropdownMenuItem onClick={() => router.push(`/productos/${row.original.id}`)}>
+                  <PencilIcon /> Editar
+                </DropdownMenuItem>
+              )}
+              {permisos.editar && permisos.eliminar && <DropdownMenuSeparator />}
+              {permisos.eliminar && (
+                <DropdownMenuItem variant="destructive" onClick={() => pedirEliminar(row.original.id, row.original.nombre)}>
+                  <Trash2Icon /> Eliminar
+                </DropdownMenuItem>
+              )}
             </DropdownMenuContent>
           </DropdownMenu>
         </div>
       ),
-    },
-  ], [router, handleEliminar]);
+    } as ColumnDef<Producto>] : []),
+  ], [router, handleEliminar, permisos.editar, permisos.eliminar]);
 
   return (
     <div className="space-y-6">
@@ -309,9 +318,11 @@ export default function ProductosClient({ productos: initial, categorias, marcas
           <Text as="h2" variant="title">Productos</Text>
           <Text variant="description">Productos del catálogo</Text>
         </div>
-        <Button size="sm" variant="outline" onClick={() => router.push('/productos/nuevo')} className="gap-1.5">
-          <Plus size={14} /> Nuevo producto
-        </Button>
+        {permisos.crear && (
+          <Button size="sm" variant="outline" onClick={() => router.push('/productos/nuevo')} className="gap-1.5">
+            <Plus size={14} /> Nuevo producto
+          </Button>
+        )}
       </div>
 
       {/* Barra de filtros */}

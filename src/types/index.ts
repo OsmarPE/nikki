@@ -5,6 +5,7 @@ export interface Usuario {
   nombre: string;
   email: string;
   rol: Rol;
+  activo: number; // TINYINT(1): 0 o 1
   creado_at: string;
 }
 

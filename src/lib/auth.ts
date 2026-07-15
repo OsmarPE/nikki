@@ -1,5 +1,6 @@
 import { SignJWT, jwtVerify } from 'jose';
 import { cookies } from 'next/headers';
+import type { PermisosMap } from '@/lib/permisos';
 
 // FIX: lanzar error en producción si JWT_SECRET no está configurado
 const jwtSecret = process.env.JWT_SECRET;
@@ -16,6 +17,11 @@ export interface JWTPayload {
   nombre: string;
   email: string;
   rol: 'admin' | 'vendedor';
+  // Permisos granulares por módulo — solo se usan cuando rol === 'vendedor'.
+  // Se calculan una vez al iniciar sesión (ver loginAction); si un admin
+  // cambia los permisos de alguien después, el cambio aplica hasta que esa
+  // persona vuelva a iniciar sesión (mismo comportamiento que un cambio de rol).
+  permisos?: PermisosMap;
   iat?: number;
   exp?: number;
 }

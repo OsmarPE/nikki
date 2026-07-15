@@ -3,6 +3,7 @@
 import { revalidatePath } from 'next/cache';
 import pool from '@/lib/db';
 import { getSession } from '@/lib/auth';
+import { tienePermiso } from '@/lib/permisos';
 import type { RowDataPacket } from 'mysql2';
 import type { MovimientoInventario } from '@/types';
 
@@ -33,7 +34,7 @@ export async function registrarMovimiento(data: {
   notas?: string;
 }) {
   const session = await getSession();
-  if (!session) return { error: 'Sin sesión.' };
+  if (!session || !tienePermiso(session, 'inventario', 'crear')) return { error: 'Sin permiso.' };
   if (data.cantidad <= 0) return { error: 'La cantidad debe ser mayor a 0.' };
 
   const conn = await pool.getConnection();

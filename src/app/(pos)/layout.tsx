@@ -4,10 +4,20 @@ import { logoutAction } from '@/actions/auth';
 import { Button } from '@/components/ui/button';
 import { Separator } from '@/components/ui/separator';
 import Link from 'next/link';
+import { primerModuloAccesible, MODULO_RUTA } from '@/lib/permisos';
 
 export default async function PosLayout({ children }: { children: React.ReactNode }) {
   const session = await getSession();
   if (!session) redirect('/login');
+
+  // Mismo panel admin para todos — un vendedor con permisos entra por aquí,
+  // solo que filtrado a lo que tiene autorizado (ver components/app-sidebar.tsx).
+  const rutaPanel = session.rol === 'admin'
+    ? '/dashboard'
+    : (() => {
+        const modulo = primerModuloAccesible(session);
+        return modulo ? MODULO_RUTA[modulo] : null;
+      })();
 
   return (
     <div className="flex min-h-screen">
@@ -21,9 +31,9 @@ export default async function PosLayout({ children }: { children: React.ReactNod
           <Link href="/pos" className="flex items-center px-3 py-2 text-sm rounded-md text-zinc-700 hover:bg-zinc-100">
             Cobrar
           </Link>
-          {session.rol === 'admin' && (
-            <Link href="/dashboard" className="flex items-center px-3 py-2 text-sm rounded-md text-zinc-700 hover:bg-zinc-100">
-              Admin
+          {rutaPanel && (
+            <Link href={rutaPanel} className="flex items-center px-3 py-2 text-sm rounded-md text-zinc-700 hover:bg-zinc-100">
+              {session.rol === 'admin' ? 'Admin' : 'Panel'}
             </Link>
           )}
         </nav>

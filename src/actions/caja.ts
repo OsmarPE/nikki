@@ -3,6 +3,7 @@
 import { revalidatePath } from 'next/cache';
 import pool from '@/lib/db';
 import { getSession } from '@/lib/auth';
+import { tienePermiso } from '@/lib/permisos';
 import type { RowDataPacket, ResultSetHeader } from 'mysql2';
 import type { SesionCaja } from '@/types';
 
@@ -123,7 +124,7 @@ export async function getSesionesCaja(filtro?: {
   solo_hoy?: boolean;
 }): Promise<SesionCajaDetalle[]> {
   const session = await getSession();
-  if (!session || session.rol !== 'admin') return [];
+  if (!tienePermiso(session, 'caja', 'ver')) return [];
 
   const where = filtro?.solo_hoy
     ? `WHERE DATE(sc.fecha_apertura) = CURDATE()`
@@ -165,7 +166,7 @@ export async function getSesionesCaja(filtro?: {
 // ─── Resumen del día para el dashboard de caja ───────────────────────────────
 export async function getResumenCajaHoy() {
   const session = await getSession();
-  if (!session || session.rol !== 'admin') return null;
+  if (!tienePermiso(session, 'caja', 'ver')) return null;
 
   const [resumen] = await pool.query<RowDataPacket[]>(`
     SELECT

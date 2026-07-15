@@ -13,9 +13,26 @@ CREATE TABLE IF NOT EXISTS usuarios (
   email         VARCHAR(255)  NOT NULL,
   password_hash VARCHAR(255)  NOT NULL,
   rol           ENUM('admin','vendedor') NOT NULL DEFAULT 'vendedor',
+  activo        TINYINT(1)    NOT NULL DEFAULT 1,
   creado_at     TIMESTAMP     NOT NULL DEFAULT CURRENT_TIMESTAMP,
   PRIMARY KEY (id),
   UNIQUE KEY uq_usuarios_email (email)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+-- ------------------------------------------------------------
+-- permisos_usuario  (permisos granulares por módulo para vendedores)
+-- ------------------------------------------------------------
+CREATE TABLE IF NOT EXISTS permisos_usuario (
+  id         INT          NOT NULL AUTO_INCREMENT,
+  usuario_id INT          NOT NULL,
+  modulo     VARCHAR(50)  NOT NULL,
+  ver        TINYINT(1)   NOT NULL DEFAULT 0,
+  crear      TINYINT(1)   NOT NULL DEFAULT 0,
+  editar     TINYINT(1)   NOT NULL DEFAULT 0,
+  eliminar   TINYINT(1)   NOT NULL DEFAULT 0,
+  PRIMARY KEY (id),
+  UNIQUE KEY uq_permisos_usuario_modulo (usuario_id, modulo),
+  CONSTRAINT fk_permisos_usuario_usuario FOREIGN KEY (usuario_id) REFERENCES usuarios (id) ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
 -- ------------------------------------------------------------

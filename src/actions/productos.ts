@@ -3,6 +3,7 @@
 import { revalidatePath } from 'next/cache';
 import pool from '@/lib/db';
 import { getSession } from '@/lib/auth';
+import { tienePermiso } from '@/lib/permisos';
 import type { RowDataPacket, ResultSetHeader } from 'mysql2';
 import type { Producto } from '@/types';
 
@@ -86,7 +87,7 @@ export async function crearProducto(data: {
   marca_id?: number | null; coleccion_id?: number | null;
 }) {
   const session = await getSession();
-  if (!session || session.rol !== 'admin') return { error: 'Sin permiso.' };
+  if (!tienePermiso(session, 'productos', 'crear')) return { error: 'Sin permiso.' };
   try {
     await pool.query<ResultSetHeader>(
       `INSERT INTO productos (sku, nombre, precio, precio_descuento, descripcion, imagen_url, categoria_id, marca_id, coleccion_id)
@@ -111,7 +112,7 @@ export async function actualizarProducto(id: number, data: {
   marca_id?: number | null; coleccion_id?: number | null;
 }) {
   const session = await getSession();
-  if (!session || session.rol !== 'admin') return { error: 'Sin permiso.' };
+  if (!tienePermiso(session, 'productos', 'editar')) return { error: 'Sin permiso.' };
 
   const entries = Object.entries(data).filter(([k, v]) => v !== undefined && COLUMNAS_PRODUCTO.has(k));
   if (entries.length === 0) return { error: 'Sin campos para actualizar.' };
@@ -136,7 +137,7 @@ export async function verificarDependenciasProducto(id: number): Promise<{
   movimientos: number;
 }> {
   const session = await getSession();
-  if (!session || session.rol !== 'admin') return { ventas: 0, movimientos: 0 };
+  if (!tienePermiso(session, 'productos', 'eliminar')) return { ventas: 0, movimientos: 0 };
 
   const [[v], [m]] = await Promise.all([
     pool.query<RowDataPacket[]>(
@@ -155,7 +156,7 @@ export async function verificarDependenciasProducto(id: number): Promise<{
 
 export async function eliminarProducto(id: number) {
   const session = await getSession();
-  if (!session || session.rol !== 'admin') return { error: 'Sin permiso.' };
+  if (!tienePermiso(session, 'productos', 'eliminar')) return { error: 'Sin permiso.' };
 
   // Verificar ventas que contienen este producto
   const [ventasRows] = await pool.query<RowDataPacket[]>(

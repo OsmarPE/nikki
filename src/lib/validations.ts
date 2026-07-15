@@ -57,6 +57,27 @@ export const cerrarCajaSchema = z.object({
 });
 export type CerrarCajaFormValues = z.infer<typeof cerrarCajaSchema>;
 
+// ─── Usuarios ─────────────────────────────────────────────────────────────────
+export const usuarioSchema = z.object({
+  nombre:   z.string().min(1, 'El nombre es requerido').max(150),
+  email:    z.string().email('Email inválido').max(255),
+  password: z.string().min(8, 'Mínimo 8 caracteres'),
+  rol:      z.enum(['admin', 'vendedor']),
+});
+export type UsuarioFormValues = z.infer<typeof usuarioSchema>;
+
+export const usuarioEditSchema = z.object({
+  nombre: z.string().min(1, 'El nombre es requerido').max(150),
+  email:  z.string().email('Email inválido').max(255),
+  rol:    z.enum(['admin', 'vendedor']),
+});
+export type UsuarioEditFormValues = z.infer<typeof usuarioEditSchema>;
+
+export const passwordSchema = z.object({
+  password: z.string().min(8, 'Mínimo 8 caracteres'),
+});
+export type PasswordFormValues = z.infer<typeof passwordSchema>;
+
 // ─── Catálogo simple (categorías, marcas) ─────────────────────────────────────
 export const catalogoNombreSchema = z.object({
   nombre: z.string().min(1, 'El nombre es requerido').max(100),

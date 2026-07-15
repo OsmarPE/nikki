@@ -14,6 +14,7 @@ import {
   LogOut,
   PlusCircle,
   Vault,
+  Settings,
 } from 'lucide-react';
 
 import {
@@ -30,31 +31,42 @@ import {
   SidebarRail,
 } from '@/components/ui/sidebar';
 import { logoutAction } from '@/actions/auth';
+import { tieneAccesoModulo, type Modulo, type PermisosMap } from '@/lib/permisos';
+import type { Rol } from '@/types';
 
-const NAV = [
-  { href: '/dashboard',   label: 'Dashboard',    icon: LayoutDashboard },
-  { href: '/ventas/nueva', label: 'Nueva venta',  icon: PlusCircle },
-  { href: '/caja',         label: 'Caja',         icon: Vault },
-  { href: '/productos',   label: 'Productos',     icon: Package },
-  { href: '/inventario',  label: 'Inventario',    icon: Warehouse },
-  { href: '/ventas',      label: 'Ventas',        icon: ShoppingCart },
-  { href: '/clientes',    label: 'Clientes',      icon: Users },
-  { href: '/categorias',  label: 'Categorías',    icon: Tag },
-  { href: '/marcas',      label: 'Marcas',        icon: Award },
-  { href: '/colecciones', label: 'Colecciones',   icon: Layers },
+// `modulo: null` = exclusivo de admin, sin importar los permisos granulares.
+const NAV: { href: string; label: string; icon: React.ElementType; modulo: Modulo | null }[] = [
+  { href: '/dashboard',   label: 'Dashboard',    icon: LayoutDashboard, modulo: null },
+  { href: '/ventas/nueva', label: 'Nueva venta',  icon: PlusCircle,     modulo: 'ventas' },
+  { href: '/caja',         label: 'Caja',         icon: Vault,          modulo: 'caja' },
+  { href: '/productos',   label: 'Productos',     icon: Package,        modulo: 'productos' },
+  { href: '/inventario',  label: 'Inventario',    icon: Warehouse,      modulo: 'inventario' },
+  { href: '/ventas',      label: 'Ventas',        icon: ShoppingCart,   modulo: 'ventas' },
+  { href: '/clientes',    label: 'Clientes',      icon: Users,          modulo: 'clientes' },
+  { href: '/categorias',  label: 'Categorías',    icon: Tag,            modulo: 'categorias' },
+  { href: '/marcas',      label: 'Marcas',        icon: Award,          modulo: 'marcas' },
+  { href: '/colecciones', label: 'Colecciones',   icon: Layers,         modulo: 'colecciones' },
+  { href: '/configuracion', label: 'Configuración', icon: Settings,     modulo: null },
 ];
 
 interface AppSidebarProps {
   nombre: string;
+  rol: Rol;
+  permisos?: PermisosMap;
 }
 
-export function AppSidebar({ nombre }: AppSidebarProps) {
+export function AppSidebar({ nombre, rol, permisos }: AppSidebarProps) {
   const pathname = usePathname();
+  const sesion = { rol, permisos };
+
+  const navVisible = NAV.filter(item =>
+    rol === 'admin' || (item.modulo !== null && tieneAccesoModulo(sesion, item.modulo))
+  );
 
   // El item activo es el de href más específico que coincide con la ruta actual,
   // para que rutas hermanas con prefijo compartido (ej. /ventas y /ventas/nueva)
   // no queden ambas resaltadas a la vez.
-  const activeHref = NAV.reduce<string | null>((best, { href }) => {
+  const activeHref = navVisible.reduce<string | null>((best, { href }) => {
     const matches = pathname === href || pathname.startsWith(href + '/');
     if (!matches) return best;
     if (!best || href.length > best.length) return href;
@@ -85,7 +97,7 @@ export function AppSidebar({ nombre }: AppSidebarProps) {
           <SidebarGroupLabel>Menú</SidebarGroupLabel>
           <SidebarGroupContent>
             <SidebarMenu className='gap-1'>
-              {NAV.map(({ href, label, icon: Icon }) => (
+              {navVisible.map(({ href, label, icon: Icon }) => (
                 <SidebarMenuItem key={href}>
                   <SidebarMenuButton
                     isActive={href === activeHref}

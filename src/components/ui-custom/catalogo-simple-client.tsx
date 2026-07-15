@@ -25,6 +25,7 @@ interface Props {
   onUpdate: (id: number, nombre: string) => Promise<{ success?: boolean; error?: string } | undefined>;
   onDelete: (id: number) => Promise<{ success?: boolean; error?: string; blocked?: boolean } | undefined>;
   onCheckUso: (id: number) => Promise<{ productos: number }>;
+  permisos: { crear: boolean; editar: boolean; eliminar: boolean };
 }
 
 // ─── Formulario dentro del Sheet ─────────────────────────────────────────────
@@ -73,7 +74,7 @@ function CatalogoForm({
 }
 
 // ─── Componente principal ─────────────────────────────────────────────────────
-export default function CatalogoSimpleClient({ titulo, items: initial, onCreate, onUpdate, onDelete, onCheckUso }: Props) {
+export default function CatalogoSimpleClient({ titulo, items: initial, onCreate, onUpdate, onDelete, onCheckUso, permisos }: Props) {
   const [items] = useState(initial);
   const [sheet, setSheet] = useState<{ modo: 'crear' | 'editar'; id?: number; nombre?: string } | null>(null);
   const [confirmOpen, setConfirmOpen] = useState(false);
@@ -140,10 +141,10 @@ export default function CatalogoSimpleClient({ titulo, items: initial, onCreate,
         </div>
       ),
     },
-    {
+    ...(permisos.editar || permisos.eliminar ? [{
       id: 'actions',
       header: '',
-      cell: ({ row }) => (
+      cell: ({ row }: { row: { original: Item } }) => (
         <div className="flex justify-end">
           <DropdownMenu>
             <DropdownMenuTrigger render={<Button variant="ghost" size="icon-sm" aria-label="Abrir menú" />}>
@@ -151,19 +152,23 @@ export default function CatalogoSimpleClient({ titulo, items: initial, onCreate,
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end">
               <DropdownMenuLabel>Acciones</DropdownMenuLabel>
-              <DropdownMenuItem onClick={() => abrirEditar(row.original)}>
-                <PencilIcon /> Editar
-              </DropdownMenuItem>
-              <DropdownMenuSeparator />
-              <DropdownMenuItem variant="destructive" onClick={() => pedirEliminar(row.original)}>
-                <Trash2Icon /> Eliminar
-              </DropdownMenuItem>
+              {permisos.editar && (
+                <DropdownMenuItem onClick={() => abrirEditar(row.original)}>
+                  <PencilIcon /> Editar
+                </DropdownMenuItem>
+              )}
+              {permisos.editar && permisos.eliminar && <DropdownMenuSeparator />}
+              {permisos.eliminar && (
+                <DropdownMenuItem variant="destructive" onClick={() => pedirEliminar(row.original)}>
+                  <Trash2Icon /> Eliminar
+                </DropdownMenuItem>
+              )}
             </DropdownMenuContent>
           </DropdownMenu>
         </div>
       ),
-    },
-  ], [handleEliminar]);
+    } as ColumnDef<Item>] : []),
+  ], [handleEliminar, permisos.editar, permisos.eliminar]);
 
   return (
     <div className="space-y-6">
@@ -172,10 +177,12 @@ export default function CatalogoSimpleClient({ titulo, items: initial, onCreate,
           <Text as="h2" variant="title">{titulo}</Text>
           <Text variant="description">Administra las {titulo.toLowerCase()} del catálogo</Text>
         </div>
-        <Button size="sm" variant={'outline'} onClick={abrirCrear}>
-          <Plus size={14} className="mr-1.5" />
-          Nueva {singular}
-        </Button>
+        {permisos.crear && (
+          <Button size="sm" variant={'outline'} onClick={abrirCrear}>
+            <Plus size={14} className="mr-1.5" />
+            Nueva {singular}
+          </Button>
+        )}
       </div>
       <DataTable
         columns={columns}

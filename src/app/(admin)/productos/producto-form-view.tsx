@@ -17,7 +17,7 @@ import { Separator } from '@/components/ui/separator';
 import { FormField, TextareaField, FieldGroup } from '@/components/ui/form-field';
 import { ImageUpload } from '@/components/ui/image-upload';
 import { crearProducto, actualizarProducto, eliminarProducto } from '@/actions/productos';
-import { formatCurrency, formatDate } from '@/lib/utils';
+import { cn, formatCurrency, formatDate } from '@/lib/utils';
 import { zodResolver, productoSchema, type ProductoFormValues } from '@/lib/validations';
 import type { Producto, Categoria, Marca, Coleccion, MovimientoInventario } from '@/types';
 
@@ -131,7 +131,7 @@ export default function ProductoFormView({
   }
 
   return (
-    <form onSubmit={handleSubmit(onSubmit)} className="max-w-4xl mx-auto">
+    <form onSubmit={handleSubmit(onSubmit as any)} className="max-w-4xl mx-auto">
 
       {/* ── Header ── */}
       <div className="flex items-start justify-between mb-8">
@@ -202,14 +202,16 @@ export default function ProductoFormView({
           <Separator orientation="vertical" className="h-4" />
           <div className="flex items-center gap-2">
             <span className="text-xs text-muted-foreground">Precio</span>
-            <span className="text-xs font-semibold">{formatCurrency(producto?.precio ?? 0)}</span>
+            <span className={cn('text-xs font-semibold', producto?.precio_descuento && 'line-through text-muted-foreground font-normal')}>
+              {formatCurrency(producto?.precio ?? 0)}
+            </span>
           </div>
           {producto?.precio_descuento && (
             <>
               <Separator orientation="vertical" className="h-4" />
               <div className="flex items-center gap-2">
                 <span className="text-xs text-muted-foreground">Con descuento</span>
-                <span className="text-xs font-semibold text-green-700">{formatCurrency(producto.precio_descuento)}</span>
+                <span className="text-xs font-bold">{formatCurrency(producto.precio_descuento)}</span>
               </div>
             </>
           )}
@@ -273,7 +275,7 @@ export default function ProductoFormView({
         <Section
           icon={DollarSign}
           title="Precios"
-          description="El precio base se usa como referencia. El precio de descuento es el que se cobra en el POS."
+          description="Ajuste de precios. Si el precio no quieres que tenga descuento, deja el campo en blanco."
         >
           <div className="grid grid-cols-2 gap-4">
             <FormField
@@ -287,7 +289,7 @@ export default function ProductoFormView({
               {...register('precio')}
             />
             <FormField
-              label="Precio especial"
+              label="Precio de Descuento"
               hint="opcional"
               type="number"
               step="0.01"

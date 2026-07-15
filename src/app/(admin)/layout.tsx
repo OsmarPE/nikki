@@ -3,14 +3,17 @@ import { redirect } from 'next/navigation';
 import { SidebarInset, SidebarProvider, SidebarTrigger } from '@/components/ui/sidebar';
 import { AppSidebar } from '@/components/app-sidebar';
 import { Separator } from '@/components/ui/separator';
+import { MODULOS, tieneAccesoModulo } from '@/lib/permisos';
 
 export default async function AdminLayout({ children }: { children: React.ReactNode }) {
   const session = await getSession();
-  if (!session || session.rol !== 'admin') redirect('/login');
+  const esAdmin = session?.rol === 'admin';
+  const tieneAlgunAcceso = MODULOS.some(m => tieneAccesoModulo(session, m.key));
+  if (!session || (!esAdmin && !tieneAlgunAcceso)) redirect('/login');
 
   return (
     <SidebarProvider>
-      <AppSidebar nombre={session.nombre} />
+      <AppSidebar nombre={session.nombre} rol={session.rol} permisos={session.permisos} />
       <SidebarInset>
         <header className="flex h-12 shrink-0 items-center gap-2 border-b px-4">
           <SidebarTrigger className="-ml-1" />

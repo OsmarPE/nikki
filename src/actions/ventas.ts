@@ -4,6 +4,8 @@ import { revalidatePath } from 'next/cache';
 import pool from '@/lib/db';
 import { getSession } from '@/lib/auth';
 import { calcularCarrito } from '@/lib/promocion';
+import { todayLocal, monthStartLocal } from '@/lib/utils';
+import { tienePermiso } from '@/lib/permisos';
 import type { RowDataPacket, ResultSetHeader } from 'mysql2';
 import type { Venta, Producto } from '@/types';
 import { randomBytes } from 'crypto';
@@ -23,11 +25,12 @@ export async function procesarVenta(input: {
   metodo_pago: 'efectivo' | 'transferencia' | 'tarjeta';
   cliente_id?: number | null;
   sesion_caja_id: number;
+  productosConDescuento?: number[];
 }) {
   const session = await getSession();
   if (!session) return { error: 'Sin sesión.' };
 
-  const { items, total } = calcularCarrito(input.lineas);
+  const { items, total } = calcularCarrito(input.lineas, input.productosConDescuento ?? []);
   if (items.length === 0) return { error: 'El carrito está vacío.' };
 
   const conn = await pool.getConnection();
@@ -110,7 +113,7 @@ export async function procesarVenta(input: {
 
 export async function getVentas(filtro?: { desde?: string; hasta?: string }): Promise<Venta[]> {
   const session = await getSession();
-  if (!session || session.rol !== 'admin') return [];
+  if (!tienePermiso(session, 'ventas', 'ver')) return [];
 
   // FIX: sin interpolación — condiciones como parámetros, estructura fija
   const conditions: string[] = [];
@@ -162,23 +165,36 @@ export async function getDashboardStats() {
   const session = await getSession();
   if (!session || session.rol !== 'admin') return null;
 
+  // FIX: CURDATE() se evalúa en la zona horaria del servidor de MySQL (UTC en
+  // Hostinger), que ya lleva ~6h de adelanto sobre America/Mexico_City. Cada
+  // tarde, entre las 18:00 y medianoche hora de México, CURDATE() ya marcaba el
+  // día siguiente y estas consultas dejaban de contar las ventas del día en
+  // curso. Se compara contra el día calculado en la zona horaria de la app, y
+  // `creado_at` (guardado en UTC) se recorre -6h antes de extraer la fecha para
+  // que coincida con el día calendario en México.
+  const hoy        = todayLocal();
+  const inicioMes  = monthStartLocal();
+
   const [ventasHoy] = await pool.query<RowDataPacket[]>(
     `SELECT COUNT(*) AS total_ventas, COALESCE(SUM(total), 0) AS ingresos
-     FROM ventas WHERE DATE(creado_at) = CURDATE()`
+     FROM ventas WHERE DATE(creado_at - INTERVAL 6 HOUR) = ?`,
+    [hoy]
   );
   const [ventasMes] = await pool.query<RowDataPacket[]>(
     `SELECT COUNT(*) AS total_ventas, COALESCE(SUM(total), 0) AS ingresos
-     FROM ventas WHERE MONTH(creado_at) = MONTH(CURDATE()) AND YEAR(creado_at) = YEAR(CURDATE())`
+     FROM ventas WHERE DATE(creado_at - INTERVAL 6 HOUR) >= ?`,
+    [inicioMes]
   );
   const [totalStock] = await pool.query<RowDataPacket[]>(
     `SELECT COALESCE(SUM(stock), 0) AS stock_total FROM productos`
   );
   const [ventasPorDia] = await pool.query<RowDataPacket[]>(
-    `SELECT DATE_FORMAT(DATE(creado_at), '%Y-%m-%d') AS fecha, COALESCE(SUM(total), 0) AS ingresos, COUNT(*) AS ventas
+    `SELECT DATE_FORMAT(DATE(creado_at - INTERVAL 6 HOUR), '%Y-%m-%d') AS fecha, COALESCE(SUM(total), 0) AS ingresos, COUNT(*) AS ventas
      FROM ventas
-     WHERE creado_at >= DATE_SUB(CURDATE(), INTERVAL 30 DAY)
+     WHERE DATE(creado_at - INTERVAL 6 HOUR) >= DATE_SUB(?, INTERVAL 30 DAY)
      GROUP BY fecha
-     ORDER BY fecha ASC`
+     ORDER BY fecha ASC`,
+    [hoy]
   );
 
   return {
@@ -204,19 +220,20 @@ export async function getDashboardByRange(
 ): Promise<DashboardRangeData | null> {
   const session = await getSession();
   if (!session || session.rol !== 'admin') return null;
-  console.log('desde', desde);
-  console.log('hasta', hasta);
   // Validar que sean fechas YYYY-MM-DD válidas para evitar inyección
   const dateRegex = /^\d{4}-\d{2}-\d{2}$/;
   if (!dateRegex.test(desde) || !dateRegex.test(hasta)) return null;
 
+  // FIX: creado_at se guarda en UTC; se recorre -6h antes de extraer la fecha
+  // para comparar contra el día calendario de America/Mexico_City (ver nota en
+  // getDashboardStats).
   const [ventasPorDia] = await pool.query<RowDataPacket[]>(
     `SELECT
-       DATE_FORMAT(DATE(creado_at), '%Y-%m-%d') AS fecha,
+       DATE_FORMAT(DATE(creado_at - INTERVAL 6 HOUR), '%Y-%m-%d') AS fecha,
        COUNT(*)                                   AS ventas,
        COALESCE(SUM(total), 0)                    AS ingresos
      FROM ventas
-     WHERE DATE(creado_at) BETWEEN ? AND ?
+     WHERE DATE(creado_at - INTERVAL 6 HOUR) BETWEEN ? AND ?
      GROUP BY fecha
      ORDER BY fecha ASC`,
     [desde, hasta]
@@ -233,7 +250,7 @@ export async function getDashboardByRange(
        SELECT venta_id, SUM(cantidad) AS cantidad_total
        FROM detalles_ventas GROUP BY venta_id
      ) dv ON dv.venta_id = v.id
-     WHERE DATE(v.creado_at) BETWEEN ? AND ?`,
+     WHERE DATE(v.creado_at - INTERVAL 6 HOUR) BETWEEN ? AND ?`,
     [desde, hasta]
   );
 

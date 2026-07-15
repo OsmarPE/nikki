@@ -22,7 +22,7 @@ import { FormField } from '@/components/ui/form-field';
 import { PaginationControls } from '@/components/ui/pagination-controls';
 import { cn } from '@/lib/utils';
 import { formatCurrency } from '@/lib/utils';
-import { calcularCarrito } from '@/lib/promocion';
+import { calcularCarrito, calcularCandidatosDescuento } from '@/lib/promocion';
 import { procesarVenta } from '@/actions/ventas';
 import { crearCliente, buscarClientes } from '@/actions/clientes';
 import { listarProductosPOS } from '@/actions/productos';
@@ -93,13 +93,16 @@ function Stepper({ paso }: { paso: number }) {
 
 // ─── Paso 1 — Productos ────────────────────────────────────────────────────────
 function PasoProductos({
-  lineas, carrito, onAbrirBuscador, onCantidad, onEliminar,
+  lineas, carrito, candidatosDescuento, productosConDescuento, onAbrirBuscador, onCantidad, onEliminar, onToggleDescuento,
 }: {
   lineas: LineaCarrito[];
   carrito: ReturnType<typeof calcularCarrito>;
+  candidatosDescuento: ReturnType<typeof calcularCandidatosDescuento>;
+  productosConDescuento: Set<number>;
   onAbrirBuscador: () => void;
   onCantidad: (id: number, delta: number) => void;
   onEliminar: (id: number) => void;
+  onToggleDescuento: (id: number) => void;
 }) {
   return (
     <div className="space-y-4">
@@ -139,7 +142,9 @@ function PasoProductos({
 
           {/* Filas */}
           <div className="divide-y divide-border/50">
-            {carrito.items.map(item => (
+            {carrito.items.map(item => {
+              const esCandidato = candidatosDescuento.some(c => c.producto_id === item.producto.id);
+              return (
               <div key={item.producto.id} className="grid grid-cols-[1fr_120px_100px_32px] gap-3 px-4 py-3 items-center">
                 {/* Info producto */}
                 <div className="flex items-center gap-2.5 min-w-0">
@@ -156,12 +161,28 @@ function PasoProductos({
                     <p className="text-sm font-medium truncate">{item.producto.nombre}</p>
                     <div className="flex items-center gap-1.5 mt-0.5">
                       <span className="text-[11px] font-mono text-muted-foreground">{item.producto.sku}</span>
+                      {item.producto.precio_descuento && (
+                        <span className="text-[10px] text-green-700 bg-green-50 border border-green-200 rounded px-1.5 py-px font-medium">
+                          Antes {formatCurrency(item.producto.precio)}
+                        </span>
+                      )}
                       {item.descuento_aplicado > 0 && (
                         <span className="text-[10px] text-green-700 bg-green-50 border border-green-200 rounded px-1.5 py-px font-medium">
                           −{formatCurrency(item.descuento_aplicado)}
                         </span>
                       )}
                     </div>
+                    {esCandidato && (
+                      <label className="flex items-center gap-1.5 mt-1 text-[11px] text-muted-foreground cursor-pointer select-none w-fit">
+                        <input
+                          type="checkbox"
+                          className="h-3 w-3 accent-green-600"
+                          checked={productosConDescuento.has(item.producto.id)}
+                          onChange={() => onToggleDescuento(item.producto.id)}
+                        />
+                        Aplicar 20% desde la 4ta pieza
+                      </label>
+                    )}
                   </div>
                 </div>
 
@@ -190,7 +211,8 @@ function PasoProductos({
                   <Trash2 size={12} />
                 </button>
               </div>
-            ))}
+              );
+            })}
           </div>
 
           {/* Totales */}
@@ -869,6 +891,7 @@ export default function NuevaVentaClient({
   // Estado wizard
   const [paso, setPaso]           = useState(1);
   const [lineas, setLineas]       = useState<LineaCarrito[]>([]);
+  const [productosConDescuento, setProductosConDescuento] = useState<Set<number>>(new Set());
   const [cliente, setCliente]     = useState<Cliente | null>(null);
   const [metodo, setMetodo]       = useState<MetodoPago>('efectivo');
   const [montoRecibido, setMontoRecibido] = useState<string>('');
@@ -884,7 +907,8 @@ export default function NuevaVentaClient({
   const [clienteBuscando, setClienteBuscando]     = useState(false);
   const [modalNuevoCliente, setModalNuevoCliente] = useState(false);
 
-  const carrito = calcularCarrito(lineas);
+  const carrito = calcularCarrito(lineas, productosConDescuento);
+  const candidatosDescuento = calcularCandidatosDescuento(lineas);
 
   // ── Carrito ────────────────────────────────────────────────────────────────
   function agregarProducto(p: Producto) {
@@ -925,6 +949,20 @@ export default function NuevaVentaClient({
 
   function eliminarLinea(id: number) {
     setLineas(prev => prev.filter(l => l.producto.id !== id));
+    setProductosConDescuento(prev => {
+      if (!prev.has(id)) return prev;
+      const next = new Set(prev);
+      next.delete(id);
+      return next;
+    });
+  }
+
+  function toggleDescuentoProducto(id: number) {
+    setProductosConDescuento(prev => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id); else next.add(id);
+      return next;
+    });
   }
 
   // ── Búsqueda de clientes ───────────────────────────────────────────────────
@@ -945,6 +983,7 @@ export default function NuevaVentaClient({
         metodo_pago:    metodo,
         cliente_id:     cliente?.id ?? null,
         sesion_caja_id: sesionCajaId,
+        productosConDescuento: Array.from(productosConDescuento),
       });
       if (r?.error) { toast.error(r.error); return; }
       setExitosa({ ventaId: r.ventaId!, folio: r.folio! });
@@ -955,6 +994,7 @@ export default function NuevaVentaClient({
   function nuevaVenta() {
     setPaso(1);
     setLineas([]);
+    setProductosConDescuento(new Set());
     setCliente(null);
     setMetodo('efectivo');
     setMontoRecibido('');
@@ -1013,9 +1053,12 @@ export default function NuevaVentaClient({
           <PasoProductos
             lineas={lineas}
             carrito={carrito}
+            candidatosDescuento={candidatosDescuento}
+            productosConDescuento={productosConDescuento}
             onAbrirBuscador={() => setModalProductos(true)}
             onCantidad={cambiarCantidad}
             onEliminar={eliminarLinea}
+            onToggleDescuento={toggleDescuentoProducto}
           />
         )}
         {paso === 2 && (

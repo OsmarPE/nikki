@@ -3,6 +3,7 @@
 import { revalidatePath } from 'next/cache';
 import pool from '@/lib/db';
 import { getSession } from '@/lib/auth';
+import { tienePermiso } from '@/lib/permisos';
 import type { RowDataPacket } from 'mysql2';
 import type { Categoria, Marca, Coleccion } from '@/types';
 
@@ -16,7 +17,7 @@ export async function getCategorias(): Promise<Categoria[]> {
 
 export async function verificarUsoCategoria(id: number): Promise<{ productos: number }> {
   const session = await getSession();
-  if (!session || session.rol !== 'admin') return { productos: 0 };
+  if (!tienePermiso(session, 'categorias', 'eliminar')) return { productos: 0 };
 
   const [rows] = await pool.query<RowDataPacket[]>(
     'SELECT COUNT(*) AS total FROM productos WHERE categoria_id = ?', [id]
@@ -26,7 +27,7 @@ export async function verificarUsoCategoria(id: number): Promise<{ productos: nu
 
 export async function crearCategoria(nombre: string) {
   const session = await getSession();
-  if (!session || session.rol !== 'admin') return { error: 'Sin permiso.' };
+  if (!tienePermiso(session, 'categorias', 'crear')) return { error: 'Sin permiso.' };
   try {
     await pool.query('INSERT INTO categorias (nombre) VALUES (?)', [nombre.trim()]);
     revalidatePath('/categorias');
@@ -38,7 +39,7 @@ export async function crearCategoria(nombre: string) {
 
 export async function actualizarCategoria(id: number, nombre: string) {
   const session = await getSession();
-  if (!session || session.rol !== 'admin') return { error: 'Sin permiso.' };
+  if (!tienePermiso(session, 'categorias', 'editar')) return { error: 'Sin permiso.' };
   await pool.query('UPDATE categorias SET nombre = ? WHERE id = ?', [nombre.trim(), id]);
   revalidatePath('/categorias');
   return { success: true };
@@ -46,7 +47,7 @@ export async function actualizarCategoria(id: number, nombre: string) {
 
 export async function eliminarCategoria(id: number) {
   const session = await getSession();
-  if (!session || session.rol !== 'admin') return { error: 'Sin permiso.' };
+  if (!tienePermiso(session, 'categorias', 'eliminar')) return { error: 'Sin permiso.' };
 
   // Validar dependencias ANTES del DELETE — no depender de FK del motor
   const [rows] = await pool.query<RowDataPacket[]>(
@@ -76,7 +77,7 @@ export async function getMarcas(): Promise<Marca[]> {
 
 export async function verificarUsoMarca(id: number): Promise<{ productos: number }> {
   const session = await getSession();
-  if (!session || session.rol !== 'admin') return { productos: 0 };
+  if (!tienePermiso(session, 'marcas', 'eliminar')) return { productos: 0 };
 
   const [rows] = await pool.query<RowDataPacket[]>(
     'SELECT COUNT(*) AS total FROM productos WHERE marca_id = ?', [id]
@@ -86,7 +87,7 @@ export async function verificarUsoMarca(id: number): Promise<{ productos: number
 
 export async function crearMarca(nombre: string) {
   const session = await getSession();
-  if (!session || session.rol !== 'admin') return { error: 'Sin permiso.' };
+  if (!tienePermiso(session, 'marcas', 'crear')) return { error: 'Sin permiso.' };
   try {
     await pool.query('INSERT INTO marcas (nombre) VALUES (?)', [nombre.trim()]);
     revalidatePath('/marcas');
@@ -98,7 +99,7 @@ export async function crearMarca(nombre: string) {
 
 export async function actualizarMarca(id: number, nombre: string) {
   const session = await getSession();
-  if (!session || session.rol !== 'admin') return { error: 'Sin permiso.' };
+  if (!tienePermiso(session, 'marcas', 'editar')) return { error: 'Sin permiso.' };
   await pool.query('UPDATE marcas SET nombre = ? WHERE id = ?', [nombre.trim(), id]);
   revalidatePath('/marcas');
   return { success: true };
@@ -106,7 +107,7 @@ export async function actualizarMarca(id: number, nombre: string) {
 
 export async function eliminarMarca(id: number) {
   const session = await getSession();
-  if (!session || session.rol !== 'admin') return { error: 'Sin permiso.' };
+  if (!tienePermiso(session, 'marcas', 'eliminar')) return { error: 'Sin permiso.' };
 
   const [rows] = await pool.query<RowDataPacket[]>(
     'SELECT COUNT(*) AS total FROM productos WHERE marca_id = ?', [id]
@@ -136,7 +137,7 @@ export async function getColecciones(incluirEliminadas = false): Promise<Colecci
 
 export async function crearColeccion(nombre: string) {
   const session = await getSession();
-  if (!session || session.rol !== 'admin') return { error: 'Sin permiso.' };
+  if (!tienePermiso(session, 'colecciones', 'crear')) return { error: 'Sin permiso.' };
   await pool.query('INSERT INTO colecciones (nombre) VALUES (?)', [nombre.trim()]);
   revalidatePath('/colecciones');
   return { success: true };
@@ -144,7 +145,7 @@ export async function crearColeccion(nombre: string) {
 
 export async function actualizarColeccion(id: number, nombre: string) {
   const session = await getSession();
-  if (!session || session.rol !== 'admin') return { error: 'Sin permiso.' };
+  if (!tienePermiso(session, 'colecciones', 'editar')) return { error: 'Sin permiso.' };
   await pool.query('UPDATE colecciones SET nombre = ? WHERE id = ?', [nombre.trim(), id]);
   revalidatePath('/colecciones');
   return { success: true };
@@ -155,7 +156,7 @@ export async function actualizarColeccion(id: number, nombre: string) {
 // El soft delete solo oculta la colección de la UI, no afecta datos existentes.
 export async function eliminarColeccionLogico(id: number) {
   const session = await getSession();
-  if (!session || session.rol !== 'admin') return { error: 'Sin permiso.' };
+  if (!tienePermiso(session, 'colecciones', 'eliminar')) return { error: 'Sin permiso.' };
   await pool.query('UPDATE colecciones SET deleted_at = NOW() WHERE id = ?', [id]);
   revalidatePath('/colecciones');
   return { success: true };
@@ -163,7 +164,7 @@ export async function eliminarColeccionLogico(id: number) {
 
 export async function restaurarColeccion(id: number) {
   const session = await getSession();
-  if (!session || session.rol !== 'admin') return { error: 'Sin permiso.' };
+  if (!tienePermiso(session, 'colecciones', 'eliminar')) return { error: 'Sin permiso.' };
   await pool.query('UPDATE colecciones SET deleted_at = NULL WHERE id = ?', [id]);
   revalidatePath('/colecciones');
   return { success: true };

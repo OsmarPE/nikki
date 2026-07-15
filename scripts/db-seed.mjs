@@ -36,8 +36,8 @@ const config = {
   multipleStatements: true,          // necesario para ejecutar el SQL completo
 };
 
-const SCHEMA = path.resolve(__dir, '..', 'database', 'migrations', '001_schema.sql');
-const SEED   = path.resolve(__dir, '..', 'database', 'seed.sql');
+const MIGRATIONS_DIR = path.resolve(__dir, '..', 'database', 'migrations');
+const SEED           = path.resolve(__dir, '..', 'database', 'seed.sql');
 
 // ---------- args ----------
 const args      = process.argv.slice(2);
@@ -59,8 +59,15 @@ const conn = await mysql.createConnection(config);
 console.log(`\n🔌 Conectado a ${config.host}:${config.port}/${config.database}\n`);
 
 try {
-  if (runSchema) await run(conn, SCHEMA);
-  if (runSeed)   await run(conn, SEED);
+  if (runSchema) {
+    const archivos = (await fs.readdir(MIGRATIONS_DIR))
+      .filter(f => f.endsWith('.sql'))
+      .sort(); // 001_, 002_, … en orden
+    for (const archivo of archivos) {
+      await run(conn, path.join(MIGRATIONS_DIR, archivo));
+    }
+  }
+  if (runSeed) await run(conn, SEED);
   console.log('\n✅ Listo.\n');
 } catch (err) {
   console.error('\n❌ Error:\n', err.message);

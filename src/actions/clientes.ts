@@ -3,6 +3,7 @@
 import { revalidatePath } from 'next/cache';
 import pool from '@/lib/db';
 import { getSession } from '@/lib/auth';
+import { tienePermiso } from '@/lib/permisos';
 import type { RowDataPacket } from 'mysql2';
 import type { Cliente } from '@/types';
 
@@ -39,7 +40,7 @@ export async function crearCliente(data: { nombre: string; telefono?: string; em
 
 export async function actualizarCliente(id: number, data: { nombre: string; telefono?: string; email?: string }) {
   const session = await getSession();
-  if (!session || session.rol !== 'admin') return { error: 'Sin permiso.' };
+  if (!tienePermiso(session, 'clientes', 'editar')) return { error: 'Sin permiso.' };
   await pool.query(
     'UPDATE clientes SET nombre = ?, telefono = ?, email = ? WHERE id = ?',
     [data.nombre.trim(), data.telefono || null, data.email || null, id]
@@ -51,7 +52,7 @@ export async function actualizarCliente(id: number, data: { nombre: string; tele
 // ─── Verificar dependencias antes de eliminar ─────────────────────────────────
 export async function verificarDependenciasCliente(id: number): Promise<{ ventas: number }> {
   const session = await getSession();
-  if (!session || session.rol !== 'admin') return { ventas: 0 };
+  if (!tienePermiso(session, 'clientes', 'eliminar')) return { ventas: 0 };
   const [rows] = await pool.query<RowDataPacket[]>(
     'SELECT COUNT(*) AS total FROM ventas WHERE cliente_id = ?', [id]
   );
@@ -60,7 +61,7 @@ export async function verificarDependenciasCliente(id: number): Promise<{ ventas
 
 export async function eliminarCliente(id: number) {
   const session = await getSession();
-  if (!session || session.rol !== 'admin') return { error: 'Sin permiso.' };
+  if (!tienePermiso(session, 'clientes', 'eliminar')) return { error: 'Sin permiso.' };
 
   // Validar dependencias ANTES del DELETE
   const [rows] = await pool.query<RowDataPacket[]>(
@@ -89,7 +90,7 @@ export interface ClienteExportRow {
 
 export async function getClientesParaExport(): Promise<ClienteExportRow[]> {
   const session = await getSession();
-  if (!session || session.rol !== 'admin') return [];
+  if (!tienePermiso(session, 'clientes', 'ver')) return [];
   const [rows] = await pool.query<RowDataPacket[]>(`
     SELECT
       c.id, c.nombre, c.telefono, c.email, c.creado_at,

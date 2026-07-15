@@ -18,7 +18,7 @@ import { buscarProductosPOS } from '@/actions/productos';
 import { buscarClientes, crearCliente } from '@/actions/clientes';
 import { procesarVenta } from '@/actions/ventas';
 import { cerrarCaja } from '@/actions/caja';
-import { calcularCarrito } from '@/lib/promocion';
+import { calcularCarrito, calcularCandidatosDescuento } from '@/lib/promocion';
 import { formatCurrency } from '@/lib/utils';
 import { useDebounce } from '@/hooks/use-debounce';
 import { Text } from '@/components/ui/text';
@@ -91,6 +91,7 @@ function NuevoClienteForm({
 export default function PosInterface({ sesion, usuarioNombre }: Props) {
   // Carrito
   const [lineas, setLineas] = useState<Linea[]>([]);
+  const [productosConDescuento, setProductosConDescuento] = useState<Set<number>>(new Set());
 
   // Búsqueda de productos
   const [query, setQuery] = useState('');
@@ -111,7 +112,8 @@ export default function PosInterface({ sesion, usuarioNombre }: Props) {
 
   const [pending, startTransition] = useTransition();
 
-  const { items, total, descuento_total, promocion_aplicada } = calcularCarrito(lineas);
+  const { items, total, descuento_total, promocion_aplicada } = calcularCarrito(lineas, productosConDescuento);
+  const candidatosDescuento = calcularCandidatosDescuento(lineas);
 
   // ── Debounce búsquedas ────────────────────────────────────────────────────
   const buscarProducto = useDebounce(async (val: string) => {
@@ -147,6 +149,20 @@ export default function PosInterface({ sesion, usuarioNombre }: Props) {
 
   function eliminarLinea(productoId: number) {
     setLineas(prev => prev.filter(l => l.producto.id !== productoId));
+    setProductosConDescuento(prev => {
+      if (!prev.has(productoId)) return prev;
+      const next = new Set(prev);
+      next.delete(productoId);
+      return next;
+    });
+  }
+
+  function toggleDescuentoProducto(productoId: number) {
+    setProductosConDescuento(prev => {
+      const next = new Set(prev);
+      if (next.has(productoId)) next.delete(productoId); else next.add(productoId);
+      return next;
+    });
   }
 
   // ── Venta ─────────────────────────────────────────────────────────────────
@@ -156,11 +172,13 @@ export default function PosInterface({ sesion, usuarioNombre }: Props) {
         lineas, metodo_pago: metodoPago,
         cliente_id: clienteSeleccionado?.id ?? null,
         sesion_caja_id: sesion.id,
+        productosConDescuento: Array.from(productosConDescuento),
       });
       if (r?.error) { toast.error(r.error); return; }
       toast.success(`Venta ${r.folio} registrada.`);
       setModalPago(false);
       setLineas([]);
+      setProductosConDescuento(new Set());
       setClienteSeleccionado(null);
       setClienteQuery('');
       window.open(`/api/pdf/${r.ventaId}`, '_blank');
@@ -249,15 +267,25 @@ export default function PosInterface({ sesion, usuarioNombre }: Props) {
                   <th className="pb-2 pr-3 font-medium text-center">Cant.</th>
                   <th className="pb-2 pr-3 font-medium text-right">Precio</th>
                   <th className="pb-2 pr-3 font-medium text-right">Dto.</th>
+                  <th className="pb-2 pr-3 font-medium text-center">Promo 4+</th>
                   <th className="pb-2 pr-3 font-medium text-right">Subtotal</th>
                   <th className="pb-2 font-medium"></th>
                 </tr>
               </thead>
               <tbody>
-                {items.map((item: ItemCarrito) => (
+                {items.map((item: ItemCarrito) => {
+                  const esCandidato = candidatosDescuento.some(c => c.producto_id === item.producto.id);
+                  return (
                   <tr key={item.producto.id} className="border-b last:border-0">
                     <td className="py-2.5 pr-3">
-                      <p className="font-medium leading-tight">{item.producto.nombre}</p>
+                      <p className="font-medium leading-tight flex items-center gap-1.5">
+                        {item.producto.nombre}
+                        {item.producto.precio_descuento && (
+                          <Badge variant="outline" className="h-4 px-1.5 text-[10px] border-blue-300 text-blue-700 bg-blue-50">
+                            Descuento
+                          </Badge>
+                        )}
+                      </p>
                       <p className="text-xs text-zinc-400 font-mono">{item.producto.sku}</p>
                     </td>
                     <td className="py-2.5 pr-3">
@@ -267,16 +295,39 @@ export default function PosInterface({ sesion, usuarioNombre }: Props) {
                         <Button size="icon" variant="outline" className="h-6 w-6 text-xs" onClick={() => cambiarCantidad(item.producto.id, 1)}>+</Button>
                       </div>
                     </td>
-                    <td className="py-2.5 pr-3 text-right">{formatCurrency(item.precio_unitario)}</td>
+                    <td className="py-2.5 pr-3 text-right">
+                      {item.producto.precio_descuento ? (
+                        <>
+                          <p className="text-[11px] text-zinc-400 line-through leading-tight">{formatCurrency(item.producto.precio)}</p>
+                          <p className="text-blue-700">{formatCurrency(item.precio_unitario)}</p>
+                        </>
+                      ) : (
+                        formatCurrency(item.precio_unitario)
+                      )}
+                    </td>
                     <td className="py-2.5 pr-3 text-right text-green-600 font-medium">
                       {item.descuento_aplicado > 0 ? `−${formatCurrency(item.descuento_aplicado)}` : '—'}
+                    </td>
+                    <td className="py-2.5 pr-3 text-center">
+                      {esCandidato && (
+                        <label className="inline-flex items-center gap-1 text-xs text-zinc-600 cursor-pointer select-none" title="Aplicar 20% de descuento a partir de la 4ta pieza de este producto">
+                          <input
+                            type="checkbox"
+                            className="h-3.5 w-3.5 accent-green-600"
+                            checked={productosConDescuento.has(item.producto.id)}
+                            onChange={() => toggleDescuentoProducto(item.producto.id)}
+                          />
+                          20%
+                        </label>
+                      )}
                     </td>
                     <td className="py-2.5 pr-3 text-right font-semibold">{formatCurrency(item.subtotal)}</td>
                     <td className="py-2.5">
                       <Button size="sm" variant="ghost" className="text-red-500 h-7 px-2" onClick={() => eliminarLinea(item.producto.id)}>✕</Button>
                     </td>
                   </tr>
-                ))}
+                  );
+                })}
               </tbody>
             </table>
           )}
