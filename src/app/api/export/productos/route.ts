@@ -9,7 +9,6 @@ const COLOR_ACCENT      = 'FF3F3F46'; // zinc-700
 const COLOR_ALT_ROW     = 'FFF4F4F5'; // zinc-100
 const COLOR_BORDER      = 'FFE4E4E7'; // zinc-200
 const COLOR_POSITIVE    = 'FF16A34A'; // green-600
-const COLOR_WARNING     = 'FFCA8A04'; // amber-600
 const COLOR_DANGER      = 'FFDC2626'; // red-600
 
 export async function GET() {
@@ -59,7 +58,6 @@ export async function GET() {
     { key: 'precio',       label: 'Precio base',       width: 14 },
     { key: 'descuento',    label: 'Precio especial',   width: 14 },
     { key: 'stock',        label: 'Stock actual',      width: 13 },
-    { key: 'stock_minimo', label: 'Stock mínimo',      width: 13 },
     { key: 'estado_stock', label: 'Estado stock',      width: 14 },
     { key: 'descripcion',  label: 'Descripción',       width: 36 },
   ];
@@ -84,22 +82,13 @@ export async function GET() {
 
   productos.forEach((p, idx) => {
     const stock        = Number(p.stock ?? 0);
-    const stockMinimo  = Number(p.stock_minimo ?? 0);
     const isAlt        = idx % 2 === 1;
     const bgColor      = isAlt ? COLOR_ALT_ROW : 'FFFFFFFF';
     const rowNum       = idx + 4;
 
     // Estado del stock
-    const estadoStock  = stock <= 0
-      ? 'Agotado'
-      : stockMinimo > 0 && stock < stockMinimo
-      ? 'Stock bajo'
-      : 'Ok';
-    const estadoColor  = stock <= 0
-      ? COLOR_DANGER
-      : stockMinimo > 0 && stock < stockMinimo
-      ? COLOR_WARNING
-      : COLOR_POSITIVE;
+    const estadoStock  = stock <= 0 ? 'Agotado' : 'Ok';
+    const estadoColor  = stock <= 0 ? COLOR_DANGER : COLOR_POSITIVE;
 
     const rowData = [
       p.sku,
@@ -110,7 +99,6 @@ export async function GET() {
       Number(p.precio),
       p.precio_descuento ? Number(p.precio_descuento) : null,
       stock,
-      stockMinimo > 0 ? stockMinimo : null,
       estadoStock,
       p.descripcion ?? '',
     ];
@@ -141,17 +129,12 @@ export async function GET() {
         cell.numFmt    = moneyFmt;
         cell.alignment = { horizontal: 'right' };
         if (val !== null) cell.font = { name: 'Arial', size: 9, color: { argb: COLOR_POSITIVE } };
-      } else if (ci === 7 || ci === 8) {
+      } else if (ci === 7) {
         // Stock
         cell.numFmt    = '#,##0';
         cell.alignment = { horizontal: 'center' };
-        if (ci === 7) {
-          const stockColor = stock <= 0 ? COLOR_DANGER
-            : stockMinimo > 0 && stock < stockMinimo ? COLOR_WARNING
-            : undefined;
-          if (stockColor) cell.font = { name: 'Arial', size: 9, bold: true, color: { argb: stockColor } };
-        }
-      } else if (ci === 9) {
+        if (stock <= 0) cell.font = { name: 'Arial', size: 9, bold: true, color: { argb: COLOR_DANGER } };
+      } else if (ci === 8) {
         // Estado stock
         cell.alignment = { horizontal: 'center' };
         cell.font      = { name: 'Arial', size: 8, bold: true, color: { argb: estadoColor } };
@@ -167,7 +150,7 @@ export async function GET() {
   const totalRowNum = productos.length + 4;
   ws.getRow(totalRowNum).height = 20;
 
-  for (let col = 1; col <= 11; col++) {
+  for (let col = 1; col <= 10; col++) {
     const cell = ws.getCell(totalRowNum, col);
     cell.fill  = { type: 'pattern', pattern: 'solid', fgColor: { argb: COLOR_HEADER_BG } };
     cell.font  = { name: 'Arial', size: 9, bold: true, color: { argb: COLOR_HEADER_FONT } };
@@ -194,8 +177,8 @@ export async function GET() {
   ws2t.fill  = { type: 'pattern', pattern: 'solid', fgColor: { argb: COLOR_HEADER_BG } };
   ws2.getRow(1).height = 24;
 
-  const ws2Headers = ['Categoría', 'Productos', 'Stock total', 'Precio prom.', 'Agotados', 'Stock bajo'];
-  const ws2Widths  = [24, 12, 13, 14, 11, 11];
+  const ws2Headers = ['Categoría', 'Productos', 'Stock total', 'Precio prom.', 'Agotados'];
+  const ws2Widths  = [24, 12, 13, 14, 11];
   const ws2Row2    = ws2.getRow(2);
   ws2Row2.height   = 20;
   ws2Headers.forEach((h, i) => {
@@ -221,12 +204,8 @@ export async function GET() {
     const stockTotal = prods.reduce((s, p) => s + Number(p.stock ?? 0), 0);
     const precioProm = prods.reduce((s, p) => s + Number(p.precio), 0) / prods.length;
     const agotados   = prods.filter(p => Number(p.stock ?? 0) <= 0).length;
-    const stockBajo  = prods.filter(p => {
-      const s = Number(p.stock ?? 0); const m = Number(p.stock_minimo ?? 0);
-      return s > 0 && m > 0 && s < m;
-    }).length;
 
-    const row = ws2.addRow([cat, prods.length, stockTotal, precioProm, agotados, stockBajo]);
+    const row = ws2.addRow([cat, prods.length, stockTotal, precioProm, agotados]);
     row.height = 18;
     row.eachCell({ includeEmpty: true }, (cell, col) => {
       cell.fill  = { type: 'pattern', pattern: 'solid', fgColor: { argb: isAlt ? COLOR_ALT_ROW : 'FFFFFFFF' } };
@@ -234,7 +213,6 @@ export async function GET() {
       cell.alignment = { horizontal: col === 1 ? 'left' : 'center', indent: col === 1 ? 1 : 0 };
       if (col === 4) { cell.numFmt = '"$"#,##0.00'; cell.alignment = { horizontal: 'right' }; }
       if (col === 5 && agotados > 0) cell.font = { name: 'Arial', size: 9, bold: true, color: { argb: COLOR_DANGER } };
-      if (col === 6 && stockBajo > 0) cell.font = { name: 'Arial', size: 9, bold: true, color: { argb: COLOR_WARNING } };
     });
     ri++;
   });
@@ -243,7 +221,7 @@ export async function GET() {
   const buffer = await wb.xlsx.writeBuffer();
   const fecha  = new Date().toISOString().slice(0, 10);
 
-  return new NextResponse(buffer as Buffer, {
+  return new NextResponse(buffer, {
     status: 200,
     headers: {
       'Content-Type':        'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',

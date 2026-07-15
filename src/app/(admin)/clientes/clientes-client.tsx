@@ -179,10 +179,8 @@ export default function ClientesClient({ clientes: initial }: { clientes: Client
                   </div>
                 </div>
                 <DropdownMenu>
-                  <DropdownMenuTrigger asChild>
-                    <Button variant="ghost" size="icon" className="h-7 w-7 -mr-1 -mt-0.5">
-                      <MoreVertical size={14} />
-                    </Button>
+                  <DropdownMenuTrigger render={<Button variant="ghost" size="icon" className="h-7 w-7 -mr-1 -mt-0.5" aria-label="Abrir menú" />}>
+                    <MoreVertical size={14} />
                   </DropdownMenuTrigger>
                   <DropdownMenuContent align="end">
                     <DropdownMenuItem onClick={() => abrirEditar(c)}>

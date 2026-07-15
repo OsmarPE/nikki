@@ -76,7 +76,7 @@ export default function ProductoFormView({
       sku:              producto.sku,
       nombre:           producto.nombre,
       precio:           producto.precio,
-      precio_descuento: producto.precio_descuento ? String(producto.precio_descuento) : '',
+      precio_descuento: producto.precio_descuento ? producto.precio_descuento : '',
       descripcion:      producto.descripcion ?? '',
       imagen_url:       producto.imagen_url ?? '',
       categoria_id:     producto.categoria_id ? String(producto.categoria_id) : '',

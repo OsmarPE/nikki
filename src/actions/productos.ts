@@ -83,7 +83,7 @@ export async function listarProductosPOS(
 export async function crearProducto(data: {
   sku: string; nombre: string; precio: number;
   precio_descuento?: number | null; descripcion?: string;
-  imagen_url?: string; categoria_id?: number | null;
+  imagen_url?: string | null; categoria_id?: number | null;
   marca_id?: number | null; coleccion_id?: number | null;
 }) {
   const session = await getSession();
@@ -108,7 +108,7 @@ export async function crearProducto(data: {
 export async function actualizarProducto(id: number, data: {
   sku?: string; nombre?: string; precio?: number;
   precio_descuento?: number | null; descripcion?: string;
-  imagen_url?: string; categoria_id?: number | null;
+  imagen_url?: string | null; categoria_id?: number | null;
   marca_id?: number | null; coleccion_id?: number | null;
 }) {
   const session = await getSession();
