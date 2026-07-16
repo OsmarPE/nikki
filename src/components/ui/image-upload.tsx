@@ -50,7 +50,7 @@ export function ImageUpload({ value, onChange, className }: ImageUploadProps) {
   }
 
   return (
-    <div className={cn('space-y-2', className)}>
+    <div className={cn('space-y-4', className)}>
       {/* Preview */}
       {value && !broken ? (
         <div className="relative group w-full aspect-video rounded-lg overflow-hidden border border-border bg-muted">
@@ -124,6 +124,19 @@ export function ImageUpload({ value, onChange, className }: ImageUploadProps) {
               <span className="text-xs text-muted-foreground">JPG, PNG, WebP · máx. 4 MB</span>
             </>
           )}
+        </button>
+      )}
+
+      {/* La imagen rota no tiene preview con overlay de "Quitar" (rama de arriba
+          solo ofrece subir una nueva) — se ofrece aquí una salida explícita para
+          dejarlo sin imagen sin tener que reemplazarla. */}
+      {broken && value && (
+        <button
+          type="button"
+          onClick={() => onChange('')}
+          className="ml-auto flex items-center justify-center gap-1.5 text-xs font-medium text-destructive hover:underline"
+        >
+          <X size={13} /> Quitar imagen rota
         </button>
       )}
 
