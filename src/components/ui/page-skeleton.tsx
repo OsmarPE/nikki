@@ -345,6 +345,26 @@ function CatalogoSkeleton({ titulo }: { titulo: string }) {
   );
 }
 
+function ConfiguracionSkeleton() {
+  return (
+    <div className="space-y-6">
+      <SkeletonHeader withButton={false} />
+      <div className="flex items-center gap-1.5 border-b border-border pb-px">
+        {Array.from({ length: 3 }).map((_, i) => (
+          <Skeleton key={i} className="h-7 w-32 rounded-md" />
+        ))}
+      </div>
+      <div className="space-y-4 pt-1">
+        <div className="flex items-center justify-between">
+          <Skeleton className="h-8 w-64 rounded-lg" />
+          <Skeleton className="h-8 w-32 rounded-lg" />
+        </div>
+        <SkeletonTable rows={5} cols={4} withSearch={false} />
+      </div>
+    </div>
+  );
+}
+
 function NuevaVentaSkeleton() {
   return (
     <div className="flex flex-col items-center justify-center min-h-[60vh]">
@@ -433,6 +453,7 @@ export type PageSkeletonVariant =
   | 'inventario'
   | 'caja'
   | 'catalogo'
+  | 'configuracion'
   | 'nueva-venta'
   | 'wizard-venta';
 
@@ -452,6 +473,7 @@ export function PageSkeleton({ variant, titulo = '' }: PageSkeletonProps) {
     case 'inventario':      return <InventarioSkeleton />;
     case 'caja':            return <CajaSkeleton />;
     case 'catalogo':        return <CatalogoSkeleton titulo={titulo} />;
+    case 'configuracion':   return <ConfiguracionSkeleton />;
     case 'nueva-venta':     return <NuevaVentaSkeleton />;
     case 'wizard-venta':    return <WizardVentaSkeleton />;
   }
