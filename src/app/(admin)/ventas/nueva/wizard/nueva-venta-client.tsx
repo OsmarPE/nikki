@@ -24,7 +24,7 @@ import { cn } from '@/lib/utils';
 import { formatCurrency } from '@/lib/utils';
 import { calcularCarrito, calcularCandidatosDescuento } from '@/lib/promocion';
 import { procesarVenta } from '@/actions/ventas';
-import { crearCliente, buscarClientes } from '@/actions/clientes';
+import { crearCliente } from '@/actions/clientes';
 import { listarProductosPOS } from '@/actions/productos';
 import { zodResolver, clienteSchema, type ClienteFormValues } from '@/lib/validations';
 import type { Producto, Cliente } from '@/types';
@@ -236,18 +236,28 @@ function PasoProductos({
 
 // ─── Paso 2 — Cliente ──────────────────────────────────────────────────────────
 function PasoCliente({
-  cliente, query, resultados, buscando,
+  cliente, query, clientes,
   onQueryChange, onSeleccionar, onQuitar, onNuevo,
 }: {
   cliente: Cliente | null;
   query: string;
-  resultados: Cliente[];
-  buscando: boolean;
+  clientes: Cliente[];
   onQueryChange: (q: string) => void;
   onSeleccionar: (c: Cliente) => void;
   onQuitar: () => void;
   onNuevo: () => void;
 }) {
+  // Filtro en el momento sobre la lista ya cargada — sin ida y vuelta al
+  // servidor, así que los resultados se reducen al instante mientras escribes.
+  const q = query.trim().toLowerCase();
+  const resultados = q === ''
+    ? clientes
+    : clientes.filter(c =>
+        c.nombre.toLowerCase().includes(q) ||
+        (c.telefono ?? '').toLowerCase().includes(q) ||
+        (c.email ?? '').toLowerCase().includes(q)
+      );
+
   return (
     <div className="space-y-4">
       <div>
@@ -284,54 +294,36 @@ function PasoCliente({
             />
           </div>
 
-          {/* Resultados flotantes */}
-          {query.length >= 2 && (
-            <div className="rounded-xl border border-border bg-popover shadow-md overflow-hidden">
-              {buscando ? (
-                <div className="px-4 py-6 text-center text-xs text-muted-foreground">Buscando…</div>
-              ) : resultados.length === 0 ? (
-                <div className="px-4 py-4 text-center text-xs text-muted-foreground">
-                  Sin resultados para "{query}"
-                </div>
-              ) : (
-                <div className="divide-y divide-border/50 max-h-52 overflow-y-auto">
-                  {resultados.map(c => (
-                    <button key={c.id} onClick={() => onSeleccionar(c)}
-                      className="w-full flex items-center gap-3 px-4 py-3 text-left hover:bg-muted/50 transition-colors">
-                      <div className="h-7 w-7 rounded-full bg-muted flex items-center justify-center shrink-0">
-                        <User size={13} className="text-muted-foreground" />
-                      </div>
-                      <div>
-                        <p className="text-sm font-medium">{c.nombre}</p>
-                        <p className="text-[11px] text-muted-foreground">{c.telefono ?? c.email ?? '—'}</p>
-                      </div>
-                    </button>
-                  ))}
-                </div>
-              )}
-              <div className="border-t border-border/60 p-2">
-                <button onClick={onNuevo}
-                  className="w-full flex items-center justify-center gap-1.5 rounded-md px-3 py-1.5 text-xs font-medium text-foreground hover:underline transition-colors">
-                  Registrar nuevo cliente
-                </button>
+          {/* Lista de clientes — todos por defecto, se filtra al escribir */}
+          <div className="rounded-xl border border-border bg-popover shadow-md overflow-hidden">
+            {resultados.length === 0 ? (
+              <div className="px-4 py-4 text-center text-xs text-muted-foreground">
+                {clientes.length === 0 ? 'Aún no hay clientes registrados' : `Sin resultados para "${query}"`}
               </div>
-            </div>
-          )}
-
-          {/* Sin búsqueda aún */}
-          {query.length < 2 && (
-            <div className="rounded-xl border-2 border-dashed border-border py-10 flex flex-col items-center gap-2 text-muted-foreground">
-              <User size={24} className="opacity-30" />
-              <div className="text-center">
-                <p className="text-sm">Sin cliente asignado</p>
-                <p className="text-xs text-muted-foreground/60 mt-0.5">Se registrará como público general</p>
+            ) : (
+              <div className="divide-y divide-border/50 max-h-64 overflow-y-auto">
+                {resultados.map(c => (
+                  <button key={c.id} onClick={() => onSeleccionar(c)}
+                    className="w-full flex items-center gap-3 px-4 py-3 text-left hover:bg-muted/50 transition-colors">
+                    <div className="h-7 w-7 rounded-full bg-muted flex items-center justify-center shrink-0">
+                      <User size={13} className="text-muted-foreground" />
+                    </div>
+                    <div>
+                      <p className="text-sm font-medium">{c.nombre}</p>
+                      <p className="text-[11px] text-muted-foreground">{c.telefono ?? c.email ?? '—'}</p>
+                    </div>
+                  </button>
+                ))}
               </div>
+            )}
+            <div className="border-t border-border/60 p-2">
               <button onClick={onNuevo}
-                className="mt-1 inline-flex items-center gap-1.5 text-xs font-medium text-foreground/60 hover:text-foreground  hover:underline transition-colors">
+                className="w-full flex items-center justify-center gap-1.5 rounded-md px-3 py-1.5 text-xs font-medium text-foreground hover:underline transition-colors">
                 Registrar nuevo cliente
               </button>
             </div>
-          )}
+          </div>
+          <p className="text-[11px] text-muted-foreground/60 text-center">Opcional — puedes continuar sin elegir uno y se registrará como público general</p>
         </div>
       )}
     </div>
@@ -901,10 +893,10 @@ export default function NuevaVentaClient({
   // Buscador de productos (modal)
   const [modalProductos, setModalProductos] = useState(false);
 
-  // Buscador de clientes (inline)
+  // Buscador de clientes (inline) — la lista completa se filtra en el momento,
+  // sin ida y vuelta al servidor (ver PasoCliente).
+  const [clientes, setClientes]                 = useState<Cliente[]>(clientesIniciales);
   const [clienteQuery, setClienteQuery]         = useState('');
-  const [clienteResultados, setClienteResultados] = useState<Cliente[]>([]);
-  const [clienteBuscando, setClienteBuscando]     = useState(false);
   const [modalNuevoCliente, setModalNuevoCliente] = useState(false);
 
   const carrito = calcularCarrito(lineas, productosConDescuento);
@@ -965,16 +957,6 @@ export default function NuevaVentaClient({
     });
   }
 
-  // ── Búsqueda de clientes ───────────────────────────────────────────────────
-  async function handleClienteQuery(q: string) {
-    setClienteQuery(q);
-    if (q.trim().length < 2) { setClienteResultados([]); return; }
-    setClienteBuscando(true);
-    const r = await buscarClientes(q);
-    setClienteResultados(r);
-    setClienteBuscando(false);
-  }
-
   // ── Confirmar venta ────────────────────────────────────────────────────────
   function confirmar() {
     startTransition(async () => {
@@ -1000,7 +982,6 @@ export default function NuevaVentaClient({
     setMontoRecibido('');
     setExitosa(null);
     setClienteQuery('');
-    setClienteResultados([]);
   }
 
   // ── Validación por paso ────────────────────────────────────────────────────
@@ -1065,10 +1046,9 @@ export default function NuevaVentaClient({
           <PasoCliente
             cliente={cliente}
             query={clienteQuery}
-            resultados={clienteResultados}
-            buscando={clienteBuscando}
-            onQueryChange={handleClienteQuery}
-            onSeleccionar={c => { setCliente(c); setClienteQuery(''); setClienteResultados([]); }}
+            clientes={clientes}
+            onQueryChange={setClienteQuery}
+            onSeleccionar={c => { setCliente(c); setClienteQuery(''); }}
             onQuitar={() => setCliente(null)}
             onNuevo={() => setModalNuevoCliente(true)}
           />
@@ -1114,7 +1094,7 @@ export default function NuevaVentaClient({
       <NuevoClienteModal
         open={modalNuevoCliente}
         onClose={() => setModalNuevoCliente(false)}
-        onCreado={c => { setCliente(c); setModalNuevoCliente(false); }}
+        onCreado={c => { setClientes(prev => [...prev, c]); setCliente(c); setModalNuevoCliente(false); }}
       />
     </div>
   );

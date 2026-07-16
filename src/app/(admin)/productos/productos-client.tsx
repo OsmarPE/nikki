@@ -186,9 +186,8 @@ function ProductosFiltroPanel({
 }
 
 // ─── Componente principal ─────────────────────────────────────────────────────
-export default function ProductosClient({ productos: initial, categorias, marcas, colecciones, permisos }: Props) {
+export default function ProductosClient({ productos, categorias, marcas, colecciones, permisos }: Props) {
   const router = useRouter();
-  const [productos] = useState(initial);
   const [busqueda, setBusqueda] = useState('');
   const [filtroOpen, setFiltroOpen] = useState(false);
   const [marcasFiltro, setMarcasFiltro] = useState<Set<string>>(new Set());
