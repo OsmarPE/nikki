@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useTransition, useMemo, useCallback } from 'react';
+import { useState, useTransition, useMemo, useCallback, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import { toast } from 'sonner';
 import { ColumnDef } from '@tanstack/react-table';
@@ -51,8 +51,24 @@ function ProductoThumb({ src, alt }: { src: string | null; alt: string }) {
 function CheckItem({ label, count, checked, onChange }: {
   label: string; count: number; checked: boolean; onChange: () => void;
 }) {
+  const inputRef = useRef<HTMLInputElement>(null);
+
+  // El clic real cae sobre el <label> (el checkbox visual es un <span>), no
+  // sobre el <input> oculto. El reenvío nativo label→input hace foco en el
+  // input y el navegador desplaza el panel con scroll para "mostrarlo" —
+  // muy notorio en filas fuera de vista (ej. Colección, al final de la
+  // lista). Se evita el reenvío nativo y se enfoca manualmente sin scroll.
+  function handleClick(e: React.MouseEvent) {
+    e.preventDefault();
+    onChange();
+    inputRef.current?.focus({ preventScroll: true });
+  }
+
   return (
-    <label className="flex items-center justify-between gap-2 px-3 py-1.5 rounded-md hover:bg-accent cursor-pointer">
+    <label
+      className="flex items-center justify-between gap-2 px-3 py-1.5 rounded-md hover:bg-accent cursor-pointer"
+      onClick={handleClick}
+    >
       <span className="flex items-center gap-2.5 min-w-0">
         <span className={[
           'h-3.5 w-3.5 rounded-[3px] border shrink-0 flex items-center justify-center transition-colors',
@@ -67,7 +83,13 @@ function CheckItem({ label, count, checked, onChange }: {
         <span className="text-sm truncate">{label}</span>
       </span>
       <span className="text-[11px] tabular-nums text-muted-foreground shrink-0">{count}</span>
-      <input type="checkbox" checked={checked} onChange={onChange} className="sr-only" />
+      <input
+        ref={inputRef}
+        type="checkbox"
+        checked={checked}
+        onChange={() => {}}
+        className="sr-only"
+      />
     </label>
   );
 }
