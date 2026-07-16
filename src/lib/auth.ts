@@ -10,7 +10,7 @@ if (!jwtSecret && process.env.NODE_ENV === 'production') {
 const secret = new TextEncoder().encode(jwtSecret ?? 'fallback-secret-solo-para-desarrollo');
 
 const COOKIE = 'pos_session';
-const EXPIRY = '8h';
+const EXPIRY = '7d';
 
 export interface JWTPayload {
   sub: string;
