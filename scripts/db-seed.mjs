@@ -10,20 +10,25 @@ import fs    from 'node:fs/promises';
 import path  from 'node:path';
 import url   from 'node:url';
 
-// ---------- leer .env.local manualmente (sin dotenv) ----------
-const __dir   = path.dirname(url.fileURLToPath(import.meta.url));
-const envPath = path.resolve(__dir, '..', '.env.local');
+// ---------- leer .env.local (o .env como respaldo) manualmente (sin dotenv) ----------
+const __dir = path.dirname(url.fileURLToPath(import.meta.url));
 
-try {
-  const raw = await fs.readFile(envPath, 'utf-8');
+async function cargarEnv(nombre) {
+  const raw = await fs.readFile(path.resolve(__dir, '..', nombre), 'utf-8');
   for (const line of raw.split('\n')) {
     const trimmed = line.trim();
     if (!trimmed || trimmed.startsWith('#')) continue;
     const [key, ...rest] = trimmed.split('=');
     process.env[key.trim()] = rest.join('=').trim();
   }
-} catch {
-  console.warn('⚠  No se encontró .env.local — usando variables de entorno del sistema.');
+  return nombre;
+}
+
+const envUsado = await cargarEnv('.env.local').catch(() => cargarEnv('.env').catch(() => null));
+if (envUsado) {
+  console.log(`ℹ️  Usando variables de ${envUsado}`);
+} else {
+  console.warn('⚠  No se encontró .env.local ni .env — usando variables de entorno del sistema.');
 }
 
 // ---------- configuración ----------

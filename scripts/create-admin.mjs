@@ -1,14 +1,15 @@
 /**
  * Uso: node scripts/create-admin.mjs
  * Crea el usuario admin inicial en la base de datos.
- * Configura .env.local antes de ejecutar.
+ * Configura .env.local o .env antes de ejecutar.
  */
 
 import bcrypt from 'bcryptjs';
 import mysql from 'mysql2/promise';
 import { config } from 'dotenv';
 
-config({ path: '.env.local' });
+// .env.local tiene prioridad si existe; .env sirve de respaldo.
+config({ path: ['.env.local', '.env'] });
 
 const conn = await mysql.createConnection({
   host:     process.env.DB_HOST     || 'localhost',
