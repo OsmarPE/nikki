@@ -7,7 +7,7 @@ import { TooltipProvider } from '@/components/ui/tooltip';
 const outfit = Outfit({ subsets: ['latin'] });
 
 export const metadata: Metadata = {
-  title: 'Sistema POS & Inventario',
+  title: 'Nikki',
   description: 'Punto de Venta e Inventario',
 };
 
