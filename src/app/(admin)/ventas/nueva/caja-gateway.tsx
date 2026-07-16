@@ -41,7 +41,7 @@ function CerrarCajaSheet({
   const [pending, startTransition] = useTransition();
   const [resultado, setResultado] = useState<{ esperado: number; diferencia: number } | null>(null);
 
-  const { register, handleSubmit, watch, formState: { errors } } = useForm<CerrarCajaFormValues>({
+  const { register, handleSubmit, watch, setValue, formState: { errors } } = useForm<CerrarCajaFormValues>({
     resolver: zodResolver(cerrarCajaSchema),
     defaultValues: { saldo_declarado: '' as unknown as number },
   });
@@ -146,14 +146,23 @@ function CerrarCajaSheet({
               </div>
             </div>
 
-            <FormField
-              label="Efectivo que tienes en caja (MXN)"
-              type="number" min="0" step="0.01" placeholder="0.00"
-              description="Cuenta los billetes y monedas físicamente"
-              error={errors.saldo_declarado?.message}
-              autoFocus
-              {...register('saldo_declarado')}
-            />
+            <div className="space-y-1.5">
+              <FormField
+                label="Efectivo que tienes en caja (MXN)"
+                type="number" min="0" step="0.01" placeholder="0.00"
+                description="Cuenta los billetes y monedas físicamente"
+                error={errors.saldo_declarado?.message}
+                autoFocus
+                {...register('saldo_declarado')}
+              />
+              <button
+                type="button"
+                onClick={() => setValue('saldo_declarado', efectivoEnCaja, { shouldValidate: true })}
+                className="text-xs text-green-700 hover:text-foreground hover:underline transition-colors"
+              >
+                Usar el monto esperado ({formatCurrency(efectivoEnCaja)})
+              </button>
+            </div>
 
             {diferenciaPrev !== null && (
               <div className={`flex items-center justify-between rounded-lg px-4 py-3 text-sm font-medium border ${

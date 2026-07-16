@@ -17,7 +17,7 @@ import { FormField } from '@/components/ui/form-field';
 import { buscarProductosPOS } from '@/actions/productos';
 import { buscarClientes, crearCliente } from '@/actions/clientes';
 import { procesarVenta } from '@/actions/ventas';
-import { cerrarCaja } from '@/actions/caja';
+import { cerrarCaja, getSesionAbiertaDetalle } from '@/actions/caja';
 import { calcularCarrito, calcularCandidatosDescuento } from '@/lib/promocion';
 import { formatCurrency } from '@/lib/utils';
 import { useDebounce } from '@/hooks/use-debounce';
@@ -31,13 +31,14 @@ interface Props { sesion: SesionCaja; usuarioNombre: string }
 
 // ─── Formulario cerrar caja ───────────────────────────────────────────────────
 function CerrarCajaForm({
-  onSubmit, pending, onCancel,
+  onSubmit, pending, onCancel, montoEsperado,
 }: {
   onSubmit: (data: CerrarCajaFormValues) => void;
   pending: boolean;
   onCancel: () => void;
+  montoEsperado: number | null;
 }) {
-  const { register, handleSubmit, formState: { errors } } = useForm<CerrarCajaFormValues>({
+  const { register, handleSubmit, setValue, formState: { errors } } = useForm<CerrarCajaFormValues>({
     resolver: zodResolver(cerrarCajaSchema),
     defaultValues: { saldo_declarado: '' as unknown as number },
   });
@@ -45,12 +46,23 @@ function CerrarCajaForm({
   return (
     <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
       <p className="text-sm text-zinc-600">Cuenta el efectivo físico e ingresa el total que tienes en caja.</p>
-      <FormField
-        label="Saldo declarado (MXN)"
-        type="number" min="0" step="0.01" placeholder="0.00"
-        error={errors.saldo_declarado?.message}
-        {...register('saldo_declarado')}
-      />
+      <div className="space-y-1.5">
+        <FormField
+          label="Saldo declarado (MXN)"
+          type="number" min="0" step="0.01" placeholder="0.00"
+          error={errors.saldo_declarado?.message}
+          {...register('saldo_declarado')}
+        />
+        {montoEsperado !== null && (
+          <button
+            type="button"
+            onClick={() => setValue('saldo_declarado', montoEsperado, { shouldValidate: true })}
+            className="text-xs text-zinc-500 hover:text-zinc-800 hover:underline transition-colors"
+          >
+            Usar el monto esperado ({formatCurrency(montoEsperado)})
+          </button>
+        )}
+      </div>
       <DialogFooter>
         <Button type="button" variant="ghost" onClick={onCancel}>Cancelar</Button>
         <Button type="submit" variant="destructive" disabled={pending}>
@@ -109,6 +121,7 @@ export default function PosInterface({ sesion, usuarioNombre }: Props) {
   const [modalPago, setModalPago] = useState(false);
   const [modalCerrarCaja, setModalCerrarCaja] = useState(false);
   const [modalNuevoCliente, setModalNuevoCliente] = useState(false);
+  const [montoEsperado, setMontoEsperado] = useState<number | null>(null);
 
   const [pending, startTransition] = useTransition();
 
@@ -186,6 +199,16 @@ export default function PosInterface({ sesion, usuarioNombre }: Props) {
   }
 
   // ── Cerrar caja ───────────────────────────────────────────────────────────
+  function abrirModalCerrarCaja() {
+    setModalCerrarCaja(true);
+    setMontoEsperado(null);
+    // Se pide fresco al abrir (no desde `sesion`, que es del momento en que
+    // cargó la página) para que refleje las ventas hechas durante el turno.
+    getSesionAbiertaDetalle().then(detalle => {
+      if (detalle) setMontoEsperado(Number(detalle.saldo_inicial) + Number(detalle.monto_efectivo));
+    });
+  }
+
   function handleCerrarCaja(data: CerrarCajaFormValues) {
     startTransition(async () => {
       const r = await cerrarCaja(sesion.id, data.saldo_declarado);
@@ -220,7 +243,7 @@ export default function PosInterface({ sesion, usuarioNombre }: Props) {
             <Text as="h2" variant="title">Punto de venta</Text>
             <p className="text-xs text-zinc-500">Vendedor: {usuarioNombre}</p>
           </div>
-          <Button size="sm" onClick={() => setModalCerrarCaja(true)}>
+          <Button size="sm" onClick={abrirModalCerrarCaja}>
             Cerrar caja
           </Button>
         </div>
@@ -442,6 +465,7 @@ export default function PosInterface({ sesion, usuarioNombre }: Props) {
               onSubmit={handleCerrarCaja}
               pending={pending}
               onCancel={() => setModalCerrarCaja(false)}
+              montoEsperado={montoEsperado}
             />
           )}
         </DialogContent>
