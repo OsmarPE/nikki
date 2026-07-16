@@ -295,13 +295,13 @@ function PasoCliente({
           </div>
 
           {/* Lista de clientes — todos por defecto, se filtra al escribir */}
-          <div className="rounded-xl border border-border bg-popover shadow-md overflow-hidden">
+          <div className="rounded-xl border border-border overflow-hidden">
             {resultados.length === 0 ? (
               <div className="px-4 py-4 text-center text-xs text-muted-foreground">
                 {clientes.length === 0 ? 'Aún no hay clientes registrados' : `Sin resultados para "${query}"`}
               </div>
             ) : (
-              <div className="divide-y divide-border/50 max-h-64 overflow-y-auto">
+              <div className="divide-y divide-border/50 max-h-52 overflow-y-auto">
                 {resultados.map(c => (
                   <button key={c.id} onClick={() => onSeleccionar(c)}
                     className="w-full flex items-center gap-3 px-4 py-3 text-left hover:bg-muted/50 transition-colors">
