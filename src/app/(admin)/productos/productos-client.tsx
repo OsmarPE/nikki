@@ -396,22 +396,21 @@ export default function ProductosClient({ productos, categorias, marcas, colecci
           )}
         </div>
 
-        <button
-          type="button"
-          disabled={sinStockCount === 0}
-          onClick={() => setSoloSinStock(v => !v)}
-          className={[
-            'inline-flex items-center gap-1.5 h-8 rounded-md border px-2.5 text-sm transition-colors disabled:opacity-50 disabled:cursor-not-allowed',
-            soloSinStock
-              ? 'border-destructive/40 bg-destructive/10 text-destructive font-medium'
-              : sinStockCount > 0
-                ? 'border-destructive/30 text-destructive hover:bg-destructive/5'
-                : 'border-border text-muted-foreground',
-          ].join(' ')}
-        >
-          <CircleAlert size={13} />
-          {sinStockCount} sin stock
-        </button>
+        {sinStockCount > 0 && (
+          <button
+            type="button"
+            onClick={() => setSoloSinStock(v => !v)}
+            className={[
+              'inline-flex items-center gap-1.5 h-8 rounded-md border px-2.5 text-sm transition-colors',
+              soloSinStock
+                ? 'border-destructive/40 bg-destructive/10 text-destructive font-medium'
+                : 'border-destructive/30 text-destructive hover:bg-destructive/5',
+            ].join(' ')}
+          >
+            <CircleAlert size={13} />
+            {sinStockCount} sin stock
+          </button>
+        )}
 
         {hayFiltros && (
           <Button variant="outline" size="sm"
