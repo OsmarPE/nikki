@@ -7,9 +7,11 @@ import { MODULOS, tieneAccesoModulo } from '@/lib/permisos';
 
 export default async function AdminLayout({ children }: { children: React.ReactNode }) {
   const session = await getSession();
-  const esAdmin = session?.rol === 'admin';
+  if (!session) redirect('/login');
+
+  const esAdmin = session.rol === 'admin';
   const tieneAlgunAcceso = MODULOS.some(m => tieneAccesoModulo(session, m.key));
-  if (!session || (!esAdmin && !tieneAlgunAcceso)) redirect('/login');
+  if (!esAdmin && !tieneAlgunAcceso) redirect('/sin-acceso');
 
   return (
     <SidebarProvider>

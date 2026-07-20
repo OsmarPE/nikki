@@ -64,10 +64,10 @@ export async function loginAction(formData: FormData) {
   if (user.rol === 'admin') {
     redirect('/dashboard');
   }
-  // Vendedor con al menos un módulo permitido: entra directo a su panel, sin
-  // pasar por /pos. Sin ningún permiso, /pos sigue siendo lo suyo (vender).
+  // Vendedor: entra directo al primer módulo para el que tiene permiso "ver".
+  // Sin ningún permiso asignado, va a la pantalla de "sin permisos".
   const modulo = primerModuloAccesible({ rol: user.rol, permisos });
-  redirect(modulo ? MODULO_RUTA[modulo] : '/pos');
+  redirect(modulo ? MODULO_RUTA[modulo] : '/sin-acceso');
 }
 
 export async function logoutAction() {
