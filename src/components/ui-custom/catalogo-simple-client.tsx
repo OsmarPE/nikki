@@ -63,7 +63,7 @@ function CatalogoForm({
       </div>
       <SheetFooter className="border-t border-border/60 px-4 py-3 flex-row justify-end gap-2">
         <Button type="button" variant="ghost" onClick={onCancel}>
-          <span className="mr-1 opacity-60">×</span> Cancelar
+          Cancelar
         </Button>
         <Button type="submit" variant="default" size="sm" disabled={pending}>
           {pending ? 'Guardando…' : modo === 'crear' ? `Crear ${singular}` : 'Guardar cambios'}
