@@ -1,13 +1,13 @@
 'use client';
 
-import { useActionState } from 'react';
+import { useActionState, useState } from 'react';
 import { loginAction } from '@/actions/auth';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Text } from '@/components/ui/text';
-import { Lock } from 'lucide-react';
+import { Lock, Eye, EyeOff } from 'lucide-react';
 
 const initialState = { error: '' };
 
@@ -19,6 +19,7 @@ export default function LoginPage() {
     },
     initialState
   );
+  const [mostrarPassword, setMostrarPassword] = useState(false);
 
   return (
     <div className="min-h-screen flex items-center justify-center">
@@ -37,7 +38,25 @@ export default function LoginPage() {
           </div>
           <div className="space-y-1.5">
             <Label htmlFor="password">Contraseña</Label>
-            <Input id="password" name="password" type="password" placeholder="••••••••" required />
+            <div className="relative">
+              <Input
+                id="password"
+                name="password"
+                type={mostrarPassword ? 'text' : 'password'}
+                placeholder="••••••••"
+                required
+                className="pr-8"
+              />
+              <button
+                type="button"
+                onClick={() => setMostrarPassword(v => !v)}
+                tabIndex={-1}
+                aria-label={mostrarPassword ? 'Ocultar contraseña' : 'Mostrar contraseña'}
+                className="absolute right-2 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground transition-colors"
+              >
+                {mostrarPassword ? <EyeOff size={14} /> : <Eye size={14} />}
+              </button>
+            </div>
           </div>
           {state?.error && (
             <p className="text-sm text-red-500 bg-red-50 px-3 py-2 rounded-md">{state.error}</p>
