@@ -89,6 +89,29 @@ export async function cambiarActivoUsuario(id: number, activo: boolean) {
   return { success: true };
 }
 
+export async function eliminarUsuario(id: number) {
+  const session = await getSession();
+  if (!session || session.rol !== 'admin') return { error: 'Sin permiso.' };
+
+  if (Number(session.sub) === id) {
+    return { error: 'No puedes eliminar tu propia cuenta.' };
+  }
+
+  const [[ventas], [cajas], [movs]] = await Promise.all([
+    pool.query<RowDataPacket[]>(`SELECT COUNT(*) AS n FROM ventas WHERE usuario_id = ?`, [id]),
+    pool.query<RowDataPacket[]>(`SELECT COUNT(*) AS n FROM sesiones_caja WHERE usuario_id = ?`, [id]),
+    pool.query<RowDataPacket[]>(`SELECT COUNT(*) AS n FROM movimientos_inventario WHERE usuario_id = ?`, [id]),
+  ]);
+  const tieneHistorial = [ventas, cajas, movs].some(r => Number(r[0].n) > 0);
+  if (tieneHistorial) {
+    return { error: 'No se puede eliminar: este usuario tiene ventas, cajas o movimientos de inventario registrados. Desactívalo en su lugar.' };
+  }
+
+  await pool.query(`DELETE FROM usuarios WHERE id = ?`, [id]);
+  revalidatePath('/configuracion');
+  return { success: true };
+}
+
 export async function getPermisosUsuario(usuarioId: number): Promise<PermisosMap> {
   const session = await getSession();
   if (!session || session.rol !== 'admin') return {};

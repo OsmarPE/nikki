@@ -5,7 +5,7 @@ import { usePagination } from '@/hooks/use-pagination';
 import { PaginationControls } from '@/components/ui/pagination-controls';
 import {
   Banknote, CreditCard, ArrowRightLeft, TrendingUp,
-  CheckCircle2, AlertCircle, Clock, Users, Hash,
+  CheckCircle2, AlertCircle, AlertTriangle, Clock, Users, Hash,
   ChevronDown, ChevronRight,
 } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -30,6 +30,12 @@ function duracion(apertura: Date | string, cierre: Date | string | null): string
   const h   = Math.floor(ms / 3_600_000);
   const m   = Math.floor((ms % 3_600_000) / 60_000);
   return h > 0 ? `${h}h ${m}m` : `${m}m`;
+}
+
+const UMBRAL_ALERTA_HORAS = 12;
+
+function horasAbiertas(apertura: Date | string): number {
+  return (Date.now() - toDate(apertura).getTime()) / 3_600_000;
 }
 
 // ─── KPI Card ─────────────────────────────────────────────────────────────────
@@ -65,6 +71,7 @@ function FilaSesion({ s }: { s: SesionCajaDetalle }) {
   const [open, setOpen] = useState(false);
   const abierta    = s.estado === 'abierta';
   const diferencia = Number(s.diferencia ?? 0);
+  const vencida    = abierta && horasAbiertas(s.fecha_apertura) > UMBRAL_ALERTA_HORAS;
 
   return (
     <div className="border-b border-border/50 last:border-0">
@@ -75,7 +82,9 @@ function FilaSesion({ s }: { s: SesionCajaDetalle }) {
       >
         {/* Estado */}
         <div className="shrink-0">
-          {abierta ? (
+          {vencida ? (
+            <div className="h-2 w-2 rounded-full bg-amber-500 ring-2 ring-amber-500/20 mt-0.5" />
+          ) : abierta ? (
             <div className="h-2 w-2 rounded-full bg-green-500 ring-2 ring-green-500/20 mt-0.5" />
           ) : (
             <div className="h-2 w-2 rounded-full bg-zinc-300 mt-0.5" />
@@ -86,17 +95,24 @@ function FilaSesion({ s }: { s: SesionCajaDetalle }) {
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-2">
             <p className="text-sm font-medium truncate">{s.usuario_nombre}</p>
-            <Badge
-              variant={abierta ? 'outline' : 'secondary'}
-              className={cn('text-[10px] h-4 px-1.5 shrink-0', abierta && 'text-green-700 border-green-300')}
-            >
-              {abierta ? 'Abierta' : 'Cerrada'}
-            </Badge>
+            {vencida ? (
+              <Badge variant="outline" className="text-[10px] h-4 px-1.5 shrink-0 text-amber-700 border-amber-300 gap-1">
+                <AlertTriangle size={9} /> Sin cerrar
+              </Badge>
+            ) : (
+              <Badge
+                variant={abierta ? 'outline' : 'secondary'}
+                className={cn('text-[10px] h-4 px-1.5 shrink-0', abierta && 'text-green-700 border-green-300')}
+              >
+                {abierta ? 'Abierta' : 'Cerrada'}
+              </Badge>
+            )}
           </div>
-          <p className="text-[11px] text-muted-foreground mt-0.5">
+          <p className={cn('text-[11px] mt-0.5', vencida ? 'text-amber-700 font-medium' : 'text-muted-foreground')}>
             Apertura {formatTime(s.fecha_apertura)}
             {s.fecha_cierre && ` · Cierre ${formatTime(s.fecha_cierre)}`}
             {' · '}{duracion(s.fecha_apertura, s.fecha_cierre)}
+            {vencida && ' · lleva demasiado tiempo abierta'}
           </p>
         </div>
 

@@ -27,7 +27,7 @@ import { reload } from '@/hooks/use-reload';
 import { formatDate } from '@/lib/utils';
 import {
   crearUsuario, actualizarUsuario, resetearPasswordUsuario, cambiarActivoUsuario,
-  getPermisosUsuario, guardarPermisosUsuario,
+  eliminarUsuario, getPermisosUsuario, guardarPermisosUsuario,
 } from '@/actions/usuarios';
 import { borrarDatosNegocio, cargarDatosMuestra } from '@/actions/mantenimiento';
 import {
@@ -180,6 +180,7 @@ export default function ConfiguracionClient({ usuarios: initial, usuarioActualId
   const [sheet, setSheet] = useState<{ modo: 'crear' | 'editar'; usuario?: Usuario } | null>(null);
   const [passwordTarget, setPasswordTarget] = useState<Usuario | null>(null);
   const [confirmTarget, setConfirmTarget] = useState<Usuario | null>(null);
+  const [eliminarTarget, setEliminarTarget] = useState<Usuario | null>(null);
   const [pending, startTransition] = useTransition();
   const [descargando, setDescargando] = useState(false);
   const [tab, setTab] = useState<'usuarios' | 'respaldo' | 'datos'>('usuarios');
@@ -252,6 +253,17 @@ export default function ConfiguracionClient({ usuarios: initial, usuarioActualId
       reload();
     });
   }, []);
+
+  function handleEliminarUsuario() {
+    if (!eliminarTarget) return;
+    startTransition(async () => {
+      const r = await eliminarUsuario(eliminarTarget.id);
+      if (r?.error) { toast.error(r.error); return; }
+      toast.success('Usuario eliminado.');
+      setEliminarTarget(null);
+      reload();
+    });
+  }
 
   async function handleDescargarBackup() {
     setDescargando(true);
@@ -370,6 +382,13 @@ export default function ConfiguracionClient({ usuarios: initial, usuarioActualId
                     <CheckCircle2 /> Activar
                   </DropdownMenuItem>
                 )}
+                <DropdownMenuItem
+                  variant="destructive"
+                  disabled={u.id === usuarioActualId}
+                  onClick={() => setEliminarTarget(u)}
+                >
+                  <Trash2 /> Eliminar
+                </DropdownMenuItem>
               </DropdownMenuContent>
             </DropdownMenu>
           </div>
@@ -549,6 +568,17 @@ export default function ConfiguracionClient({ usuarios: initial, usuarioActualId
         description={`"${confirmTarget?.nombre}" no podrá iniciar sesión hasta que lo reactives. Su historial de ventas y movimientos se conserva.`}
         confirmLabel="Desactivar"
         onConfirm={() => confirmTarget && handleToggleActivo(confirmTarget, false)}
+        pending={pending}
+      />
+
+      {/* Confirmar eliminación de usuario */}
+      <ConfirmDialog
+        open={eliminarTarget !== null}
+        onOpenChange={open => !open && setEliminarTarget(null)}
+        title="Eliminar usuario"
+        description={`Esto elimina permanentemente la cuenta de "${eliminarTarget?.nombre}". No se puede deshacer. Si tiene ventas, cajas o movimientos de inventario registrados, no podrá eliminarse — desactívalo en su lugar.`}
+        confirmLabel="Eliminar"
+        onConfirm={handleEliminarUsuario}
         pending={pending}
       />
 

@@ -21,6 +21,13 @@ import { formatCurrency, formatTime, formatTimeShort } from '@/lib/utils';
 import type { SesionCajaDetalle } from '@/actions/caja';
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
+const UMBRAL_ALERTA_HORAS = 12;
+
+function horasAbiertas(apertura: Date | string): number {
+  const d = apertura instanceof Date ? apertura : new Date(String(apertura).replace(' ', 'T') + 'Z');
+  return (Date.now() - d.getTime()) / 3_600_000;
+}
+
 function duracion(apertura: Date | string): string {
   const d   = apertura instanceof Date ? apertura : new Date(String(apertura).replace(' ', 'T') + 'Z');
   const ms  = Date.now() - d.getTime();
@@ -253,23 +260,34 @@ function CajaAbierta({ sesion, onContinuar }: { sesion: SesionCajaDetalle; onCon
   ];
 
   const cajaActual = Number(sesion.saldo_inicial) + Number(sesion.monto_efectivo);
-
+  const cajaVieja  = horasAbiertas(sesion.fecha_apertura) > UMBRAL_ALERTA_HORAS;
 
   return (
     <div className="max-w-md w-full mx-auto space-y-5">
-     
+
 
       {/* Tarjeta principal */}
       <Card className="px-5 py-5 ">
         <div>
           <h2 className="text-sm mb-1 font-semibold">Tu caja está abierta</h2>
           <div className='flex items-center gap-2'>
-            <div className='w-1.5 h-1.5 rounded-full bg-green-500'></div>
+            <div className={`w-1.5 h-1.5 rounded-full ${cajaVieja ? 'bg-amber-500' : 'bg-green-500'}`}></div>
             <p className="text-xs text-muted-foreground mt-0.5">
               Abierta desde las {formatTimeShort(sesion.fecha_apertura)} · {duracion(sesion.fecha_apertura)} activa
             </p>
           </div>
         </div>
+
+        {cajaVieja && (
+          <div className="flex items-start gap-2 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2.5 text-xs text-amber-800">
+            <AlertTriangle size={14} className="shrink-0 mt-0.5" />
+            <span>
+              Esta caja lleva abierta más de {UMBRAL_ALERTA_HORAS}h. Ciérrala al final de tu turno
+              para que el corte del día se registre correctamente.
+            </span>
+          </div>
+        )}
+
          <Separator />
         {/* Ingresos totales */}
         <div className="flex items-center justify-between">
