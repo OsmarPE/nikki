@@ -10,7 +10,7 @@ import { UserRound, Phone, Mail, MoreVertical, Pencil, Trash2, UserPlus, FileDow
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Card } from '@/components/ui/card';
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
+import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription, SheetFooter } from '@/components/ui/sheet';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { FormField, FieldGroup } from '@/components/ui/form-field';
 import { ConfirmDialog } from '@/components/ui/confirm-dialog';
@@ -20,22 +20,23 @@ import { formatDate } from '@/lib/utils';
 import { zodResolver, clienteSchema, type ClienteFormValues } from '@/lib/validations';
 import type { Cliente } from '@/types';
 
-function ClienteForm({ defaultValues, onSubmit, pending, onCancel }: {
+function ClienteForm({ defaultValues, onSubmit, pending, onCancel, modo }: {
   defaultValues: ClienteFormValues;
   onSubmit: (data: ClienteFormValues) => void;
   pending: boolean;
   onCancel: () => void;
+  modo: 'crear' | 'editar';
 }) {
   const { register, handleSubmit, formState: { errors } } = useForm<ClienteFormValues>({
     resolver: zodResolver(clienteSchema),
     defaultValues,
   });
   return (
-    <form onSubmit={handleSubmit(onSubmit)} className="flex flex-col gap-0">
-      <div className="px-5 py-4 space-y-3">
+    <form onSubmit={handleSubmit(onSubmit)} className="flex flex-col h-full">
+      <div className="flex-1 px-4 py-6 space-y-3">
         <FieldGroup label="Datos personales">
           <FormField label="Nombre completo" placeholder="Ej. María García"
-            error={errors.nombre?.message} {...register('nombre')} />
+            error={errors.nombre?.message} autoFocus {...register('nombre')} />
         </FieldGroup>
         <FieldGroup label="Contacto">
           <FormField label="Teléfono" hint="opcional" placeholder="55 1234 5678"
@@ -44,12 +45,14 @@ function ClienteForm({ defaultValues, onSubmit, pending, onCancel }: {
             placeholder="ejemplo@correo.com" error={errors.email?.message} {...register('email')} />
         </FieldGroup>
       </div>
-      <DialogFooter>
-        <Button type="button" variant="ghost" onClick={onCancel}>Cancelar</Button>
-        <Button type="submit" variant="default" size="sm" disabled={pending}>
-          {pending ? 'Guardando…' : 'Guardar cliente'}
+      <SheetFooter className="border-t border-border/60 px-4 py-3 flex-row justify-end gap-2">
+        <Button type="button" variant="ghost" onClick={onCancel}>
+          Cancelar
         </Button>
-      </DialogFooter>
+        <Button type="submit" variant="default" size="sm" disabled={pending}>
+          {pending ? 'Guardando…' : modo === 'crear' ? 'Crear' : 'Guardar'}
+        </Button>
+      </SheetFooter>
     </form>
   );
 }
@@ -221,20 +224,25 @@ export default function ClientesClient({ clientes: initial }: { clientes: Client
         </>
       )}
 
-      {/* Modal crear/editar */ }
-      <Dialog open={modal !== null} onOpenChange={() => setModal(null)}>
-        <DialogContent className="max-w-sm p-0 gap-0 overflow-hidden">
-          <DialogHeader className="px-5 pt-5 pb-3 border-b border-border/60">
-            <DialogTitle className="text-sm font-semibold">
+      {/* Sheet crear/editar */}
+      <Sheet open={modal !== null} onOpenChange={open => !open && setModal(null)}>
+        <SheetContent side="right" className="w-full sm:max-w-sm p-0 flex flex-col gap-0">
+          <SheetHeader className="px-4 pt-5 pb-4 border-b border-border/60">
+            <SheetTitle className="text-sm font-semibold">
               {modal === 'crear' ? 'Nuevo cliente' : 'Editar cliente'}
-            </DialogTitle>
-          </DialogHeader>
+            </SheetTitle>
+            <SheetDescription className="text-xs">
+              {modal === 'crear'
+                ? 'Ingresa los datos para registrar un nuevo cliente.'
+                : 'Modifica los datos del cliente.'}
+            </SheetDescription>
+          </SheetHeader>
           {modal !== null && (
             <ClienteForm key={modal + editId} defaultValues={defaultValues}
-              onSubmit={handleSubmit} pending={pending} onCancel={() => setModal(null)} />
+              onSubmit={handleSubmit} pending={pending} onCancel={() => setModal(null)} modo={modal} />
           )}
-        </DialogContent>
-      </Dialog>
+        </SheetContent>
+      </Sheet>
 
       {/* Confirm eliminar */}
       <ConfirmDialog

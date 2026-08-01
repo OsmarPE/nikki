@@ -33,10 +33,9 @@ export const ACCIONES: { key: Accion; label: string }[] = [
   { key: 'eliminar', label: 'Eliminar' },
 ];
 
-// Ruta del panel admin que corresponde a cada módulo — usada tanto por el
-// sidebar del panel admin como por el layout de /pos para saber a dónde
-// mandar a un vendedor con permisos (ver components/app-sidebar.tsx y
-// app/(pos)/layout.tsx). Debe reflejar exactamente RUTA_MODULO en middleware.ts.
+// Ruta del panel admin que corresponde a cada módulo — usada por el login,
+// la raíz del sitio y el middleware para saber a dónde mandar a un vendedor
+// según sus permisos (ver actions/auth.ts, app/page.tsx y middleware.ts).
 export const MODULO_RUTA: Record<Modulo, string> = {
   productos:   '/productos',
   categorias:  '/categorias',

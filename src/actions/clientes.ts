@@ -14,18 +14,6 @@ export async function getClientes(): Promise<Cliente[]> {
   return rows as Cliente[];
 }
 
-export async function buscarClientes(query: string): Promise<Cliente[]> {
-  const escaped = query.trim().replace(/[%_\\]/g, '\\$&');
-  const like = `%${escaped}%`;
-  const [rows] = await pool.query<RowDataPacket[]>(
-    `SELECT id, nombre, telefono, email FROM clientes
-     WHERE nombre LIKE ? OR telefono LIKE ? OR email LIKE ?
-     ORDER BY nombre ASC LIMIT 10`,
-    [like, like, like]
-  );
-  return rows as Cliente[];
-}
-
 export async function crearCliente(data: { nombre: string; telefono?: string; email?: string }) {
   const session = await getSession();
   if (!session) return { error: 'Sin sesión.' };

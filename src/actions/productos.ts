@@ -41,21 +41,6 @@ export async function getProducto(id: number): Promise<Producto | null> {
   return (rows[0] as Producto) ?? null;
 }
 
-export async function buscarProductosPOS(query: string): Promise<Producto[]> {
-  if (!query || query.trim().length < 1) return [];
-  const escaped = query.trim().replace(/[%_\\]/g, '\\$&');
-  const like = `%${escaped}%`;
-  const [rows] = await pool.query<RowDataPacket[]>(`
-    SELECT p.*, m.nombre AS marca_nombre
-    FROM productos p
-    LEFT JOIN marcas m ON m.id = p.marca_id
-    WHERE (p.sku LIKE ? OR p.nombre LIKE ?)
-    ORDER BY p.nombre ASC
-    LIMIT 20
-  `, [like, like]);
-  return rows as Producto[];
-}
-
 export async function listarProductosPOS(
   query: string,
   page: number,
