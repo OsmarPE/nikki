@@ -81,7 +81,8 @@ CREATE TABLE IF NOT EXISTS colecciones (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
 -- ------------------------------------------------------------
--- productos
+-- productos  (soft delete via activo, para conservar el historial
+-- de ventas / movimientos cuando el cliente ya no vende un producto)
 -- ------------------------------------------------------------
 CREATE TABLE IF NOT EXISTS productos (
   id               INT              NOT NULL AUTO_INCREMENT,
@@ -95,6 +96,7 @@ CREATE TABLE IF NOT EXISTS productos (
   categoria_id     INT              DEFAULT NULL,
   marca_id         INT              DEFAULT NULL,
   coleccion_id     INT              DEFAULT NULL,
+  activo           TINYINT(1)       NOT NULL DEFAULT 1,
   creado_at        TIMESTAMP        NOT NULL DEFAULT CURRENT_TIMESTAMP,
   PRIMARY KEY (id),
   UNIQUE KEY uq_productos_sku (sku),

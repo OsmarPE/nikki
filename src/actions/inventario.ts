@@ -81,6 +81,67 @@ export async function registrarMovimiento(data: {
   }
 }
 
+// Solo revierte movimientos manuales (compra/ajuste/devolución). Los de
+// motivo='venta' quedan intocables: son los únicos que genera el flujo de
+// venta (ver actions/ventas.ts) y borrarlos dejaría el Kardex desincronizado
+// de la venta, que seguiría existiendo con su ingreso registrado.
+export async function eliminarMovimiento(id: number) {
+  const session = await getSession();
+  if (!session || !tienePermiso(session, 'inventario', 'eliminar')) return { error: 'Sin permiso.' };
+
+  const conn = await pool.getConnection();
+  try {
+    await conn.beginTransaction();
+
+    const [movRows] = await conn.query<RowDataPacket[]>(
+      `SELECT producto_id, tipo, cantidad, motivo FROM movimientos_inventario WHERE id = ? FOR UPDATE`,
+      [id]
+    );
+    const mov = movRows[0];
+    if (!mov) {
+      await conn.rollback();
+      return { error: 'Movimiento no encontrado.' };
+    }
+    if (mov.motivo === 'venta') {
+      await conn.rollback();
+      return { error: 'No se pueden eliminar movimientos de venta.' };
+    }
+
+    const [pRows] = await conn.query<RowDataPacket[]>(
+      `SELECT stock FROM productos WHERE id = ? FOR UPDATE`,
+      [mov.producto_id]
+    );
+    if (!pRows[0]) {
+      await conn.rollback();
+      return { error: 'Producto no encontrado.' };
+    }
+    const stockActual = Number(pRows[0].stock);
+
+    // Revertir es aplicar el delta contrario al que se aplicó al registrarlo.
+    const revertDelta = mov.tipo === 'entrada' ? -Number(mov.cantidad) : Number(mov.cantidad);
+    const stockNuevo  = stockActual + revertDelta;
+
+    if (stockNuevo < 0) {
+      await conn.rollback();
+      return { error: `No se puede eliminar: el stock quedaría en ${stockNuevo} porque ya hubo movimientos posteriores. Disponible actual: ${stockActual}.` };
+    }
+
+    await conn.query(`DELETE FROM movimientos_inventario WHERE id = ?`, [id]);
+    await conn.query(`UPDATE productos SET stock = stock + ? WHERE id = ?`, [revertDelta, mov.producto_id]);
+
+    await conn.commit();
+    revalidatePath('/inventario');
+    revalidatePath('/productos');
+    return { success: true };
+  } catch (e) {
+    await conn.rollback();
+    console.error(e);
+    return { error: 'Error al eliminar el movimiento.' };
+  } finally {
+    conn.release();
+  }
+}
+
 export async function getStockProducto(productoId: number): Promise<number> {
   const [rows] = await pool.query<RowDataPacket[]>(
     `SELECT stock FROM productos WHERE id = ?`,

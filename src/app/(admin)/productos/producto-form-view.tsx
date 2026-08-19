@@ -68,7 +68,6 @@ export default function ProductoFormView({
   const router = useRouter();
   const [pending, startTransition] = useTransition();
   const [confirmEliminar, setConfirmEliminar] = useState(false);
-  const [blockedMsg, setBlockedMsg] = useState<string | undefined>();
 
   const { register, handleSubmit, control, setValue, watch, formState: { errors, isDirty } } = useForm<ProductoFormValues>({
     resolver: zodResolver(productoSchema),
@@ -119,11 +118,7 @@ export default function ProductoFormView({
   function handleEliminar() {
     startTransition(async () => {
       const r = await eliminarProducto(producto!.id);
-      if (r?.error) {
-        if (r.blocked) { setBlockedMsg(r.error); return; }
-        toast.error(r.error);
-        return;
-      }
+      if (r?.error) { toast.error(r.error); return; }
       toast.success('Producto eliminado.');
       router.push('/productos');
       router.refresh();
@@ -418,11 +413,9 @@ export default function ProductoFormView({
 
       <ConfirmDialog
         open={confirmEliminar}
-        onOpenChange={v => { setConfirmEliminar(v); if (!v) setBlockedMsg(undefined); }}
+        onOpenChange={setConfirmEliminar}
         title="Eliminar producto"
-        description={`¿Estás seguro de que deseas eliminar "${producto?.nombre}"? Esta acción no se puede deshacer.`}
-        blocked={blockedMsg}
-        warning={!blockedMsg ? "Este producto no tiene ventas ni movimientos registrados. Puedes eliminarlo sin problema." : undefined}
+        description={`¿Estás seguro de que deseas eliminar "${producto?.nombre}"?`}
         confirmLabel="Sí, eliminar producto"
         onConfirm={handleEliminar}
         pending={pending}

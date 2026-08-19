@@ -45,6 +45,7 @@ export interface Producto {
   categoria_id: number | null;
   marca_id: number | null;
   coleccion_id: number | null;
+  activo: number; // TINYINT(1): 0 o 1
   creado_at: string;
   // joins opcionales
   categoria_nombre?: string;

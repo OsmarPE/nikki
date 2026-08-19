@@ -12,7 +12,7 @@ import { DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuIte
 import { DataTable } from '@/components/ui/data-table';
 import { ConfirmDialog } from '@/components/ui/confirm-dialog';
 import { Text } from '@/components/ui/text';
-import { eliminarProducto, verificarDependenciasProducto } from '@/actions/productos';
+import { eliminarProducto } from '@/actions/productos';
 import { formatCurrency } from '@/lib/utils';
 import type { Producto, Categoria, Marca, Coleccion } from '@/types';
 
@@ -215,8 +215,6 @@ export default function ProductosClient({ productos, categorias, marcas, colecci
 
   const [confirmOpen, setConfirmOpen] = useState(false);
   const [confirmTarget, setConfirmTarget] = useState<{ id: number; nombre: string } | null>(null);
-  const [blockedMsg, setBlockedMsg] = useState<string | undefined>();
-  const [confirmDeps, setConfirmDeps] = useState<{ ventas: number; movimientos: number } | null>(null);
 
   const totalFiltrosActivos = marcasFiltro.size + categoriasFiltro.size + coleccionesFiltro.size;
   const hayFiltros = busqueda || totalFiltrosActivos > 0 || soloSinStock;
@@ -238,25 +236,17 @@ export default function ProductosClient({ productos, categorias, marcas, colecci
 
   function pedirEliminar(id: number, nombre: string) {
     setConfirmTarget({ id, nombre });
-    setConfirmDeps(null);
     setConfirmOpen(true);
-    // consultar dependencias en paralelo — sin bloquear la apertura del modal
-    verificarDependenciasProducto(id).then(setConfirmDeps);
   }
 
   const handleEliminar = useCallback(() => {
     if (!confirmTarget) return;
     startTransition(async () => {
       const r = await eliminarProducto(confirmTarget.id);
-      if (r?.error) {
-        if (r.blocked) { setBlockedMsg(r.error); return; }
-        toast.error(r.error);
-        return;
-      }
+      if (r?.error) { toast.error(r.error); return; }
       toast.success('Producto eliminado.');
       setConfirmOpen(false);
       setConfirmTarget(null);
-      setBlockedMsg(undefined);
       router.refresh();
     });
   }, [confirmTarget, router]);
@@ -429,16 +419,9 @@ export default function ProductosClient({ productos, categorias, marcas, colecci
 
       <ConfirmDialog
         open={confirmOpen}
-        onOpenChange={open => { setConfirmOpen(open); if (!open) { setConfirmTarget(null); setBlockedMsg(undefined); } }}
+        onOpenChange={open => { setConfirmOpen(open); if (!open) setConfirmTarget(null); }}
         title="Eliminar producto"
-        description={`¿Estás seguro de que deseas eliminar "${confirmTarget?.nombre}"? Esta acción no se puede deshacer.`}
-        warning={
-          confirmDeps === null
-            ? 'Verificando dependencias…'
-            : confirmDeps.ventas > 0 || confirmDeps.movimientos > 0
-              ? `Este producto aparece en ${confirmDeps.ventas > 0 ? `${confirmDeps.ventas} venta${confirmDeps.ventas > 1 ? 's' : ''}` : ''}${confirmDeps.ventas > 0 && confirmDeps.movimientos > 0 ? ' y ' : ''}${confirmDeps.movimientos > 0 ? `${confirmDeps.movimientos} movimiento${confirmDeps.movimientos > 1 ? 's' : ''} de inventario` : ''}. Eliminar podría impedir ver esos registros correctamente.`
-              : undefined
-        }
+        description={`¿Estás seguro de que deseas eliminar "${confirmTarget?.nombre}"?`}
         confirmLabel="Sí, eliminar producto"
         onConfirm={handleEliminar}
         pending={false}

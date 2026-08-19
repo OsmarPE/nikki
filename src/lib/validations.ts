@@ -38,7 +38,10 @@ export type ProductoFormValues = z.infer<typeof productoSchema>;
 export const movimientoSchema = z.object({
   producto_id: z.string().min(1, 'Selecciona un producto'),
   tipo:        z.enum(['entrada', 'salida']),
-  motivo:      z.enum(['venta', 'devolucion', 'compra', 'ajuste']),
+  // 'venta' se excluye a propósito: esos movimientos solo los genera el
+  // flujo de venta (ver actions/ventas.ts), nunca el registro manual — así
+  // el motivo sirve como señal confiable de qué movimientos son intocables.
+  motivo:      z.enum(['devolucion', 'compra', 'ajuste']),
   cantidad:    z.coerce.number().int().positive('La cantidad debe ser mayor a 0'),
   referencia:  z.string().max(100).optional().or(z.literal('')),
   notas:       z.string().max(500).optional().or(z.literal('')),

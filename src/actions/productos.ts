@@ -23,6 +23,7 @@ export async function getProductos(): Promise<Producto[]> {
     LEFT JOIN categorias  c   ON c.id   = p.categoria_id
     LEFT JOIN marcas       m   ON m.id   = p.marca_id
     LEFT JOIN colecciones  col ON col.id = p.coleccion_id
+    WHERE p.activo = 1
     ORDER BY p.nombre ASC
   `);
   return rows as Producto[];
@@ -54,7 +55,7 @@ export async function listarProductosPOS(
     SELECT p.*, m.nombre AS marca_nombre, COUNT(*) OVER() AS total_count
     FROM productos p
     LEFT JOIN marcas m ON m.id = p.marca_id
-    ${like ? 'WHERE (p.sku LIKE ? OR p.nombre LIKE ?)' : ''}
+    WHERE p.activo = 1 ${like ? 'AND (p.sku LIKE ? OR p.nombre LIKE ?)' : ''}
     ORDER BY p.nombre ASC
     LIMIT ? OFFSET ?
   `, like ? [like, like, pageSize, offset] : [pageSize, offset]);
@@ -116,59 +117,26 @@ export async function actualizarProducto(id: number, data: {
   }
 }
 
-// ─── Verificar dependencias antes de eliminar ─────────────────────────────────
-export async function verificarDependenciasProducto(id: number): Promise<{
-  ventas: number;
-  movimientos: number;
-}> {
-  const session = await getSession();
-  if (!tienePermiso(session, 'productos', 'eliminar')) return { ventas: 0, movimientos: 0 };
-
-  const [[v], [m]] = await Promise.all([
-    pool.query<RowDataPacket[]>(
-      'SELECT COUNT(*) AS total FROM detalles_ventas WHERE producto_id = ?', [id]
-    ),
-    pool.query<RowDataPacket[]>(
-      'SELECT COUNT(*) AS total FROM movimientos_inventario WHERE producto_id = ?', [id]
-    ),
-  ]);
-
-  return {
-    ventas:      Number(v[0]?.total ?? 0),
-    movimientos: Number(m[0]?.total ?? 0),
-  };
-}
-
+// Si el producto tiene ventas o movimientos de inventario registrados no se
+// puede borrar de verdad (rompería el historial), así que en ese caso se
+// desactiva en su lugar: deja de aparecer en el POS y en el selector de
+// movimientos, pero conserva sus registros pasados intactos.
 export async function eliminarProducto(id: number) {
   const session = await getSession();
   if (!tienePermiso(session, 'productos', 'eliminar')) return { error: 'Sin permiso.' };
 
-  // Verificar ventas que contienen este producto
-  const [ventasRows] = await pool.query<RowDataPacket[]>(
-    'SELECT COUNT(*) AS total FROM detalles_ventas WHERE producto_id = ?', [id]
-  );
-  const totalVentas = Number((ventasRows[0] as RowDataPacket).total ?? 0);
-  if (totalVentas > 0) {
-    return {
-      error: `Este producto aparece en ${totalVentas} ${totalVentas === 1 ? 'venta registrada' : 'ventas registradas'}. No se puede eliminar para conservar el historial.`,
-      blocked: true,
-      count: totalVentas,
-      reason: 'ventas',
-    };
-  }
+  const [[v], [m]] = await Promise.all([
+    pool.query<RowDataPacket[]>('SELECT COUNT(*) AS total FROM detalles_ventas WHERE producto_id = ?', [id]),
+    pool.query<RowDataPacket[]>('SELECT COUNT(*) AS total FROM movimientos_inventario WHERE producto_id = ?', [id]),
+  ]);
+  const totalVentas = Number(v[0]?.total ?? 0);
+  const totalMov    = Number(m[0]?.total ?? 0);
 
-  // Verificar movimientos de inventario
-  const [movRows] = await pool.query<RowDataPacket[]>(
-    'SELECT COUNT(*) AS total FROM movimientos_inventario WHERE producto_id = ?', [id]
-  );
-  const totalMov = Number((movRows[0] as RowDataPacket).total ?? 0);
-  if (totalMov > 0) {
-    return {
-      error: `Este producto tiene ${totalMov} ${totalMov === 1 ? 'movimiento de inventario' : 'movimientos de inventario'}. No se puede eliminar para conservar el historial.`,
-      blocked: true,
-      count: totalMov,
-      reason: 'inventario',
-    };
+  if (totalVentas > 0 || totalMov > 0) {
+    await pool.query('UPDATE productos SET activo = 0 WHERE id = ?', [id]);
+    revalidatePath('/productos');
+    revalidatePath('/inventario');
+    return { success: true };
   }
 
   await pool.query('DELETE FROM productos WHERE id = ?', [id]);

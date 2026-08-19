@@ -6,7 +6,7 @@ import { toast } from 'sonner';
 import { ColumnDef } from '@tanstack/react-table';
 import {
   MoreHorizontalIcon, PencilIcon, KeyRound, Ban, CheckCircle2,
-  Plus, ShieldCheck, Database, Download, UserRound, Lock, TriangleAlert, Trash2, Sparkles,
+  Plus, ShieldCheck, Database, Download, UserRound, Lock, TriangleAlert, Trash2, Sparkles, Type,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -24,6 +24,8 @@ import { ConfirmDialog } from '@/components/ui/confirm-dialog';
 import { FormField } from '@/components/ui/form-field';
 import { Text } from '@/components/ui/text';
 import { reload } from '@/hooks/use-reload';
+import { useFontSize } from '@/hooks/use-font-size';
+import { FONT_SIZE_OPTIONS } from '@/lib/font-size';
 import { formatDate } from '@/lib/utils';
 import {
   crearUsuario, actualizarUsuario, resetearPasswordUsuario, cambiarActivoUsuario,
@@ -174,6 +176,42 @@ function PermisosForm({
   );
 }
 
+// ─── Tamaño de fuente ────────────────────────────────────────────────────────────
+function AparienciaTab() {
+  const { fontSize, setFontSize } = useFontSize();
+
+  return (
+    <Card className="p-6 max-w-xl">
+      <div className="flex items-start gap-4">
+        <div className="h-10 w-10 rounded-lg bg-muted flex items-center justify-center shrink-0">
+          <Type size={18} className="text-muted-foreground" />
+        </div>
+        <div className="flex-1 space-y-1">
+          <h3 className="text-sm font-semibold">Tamaño de fuente</h3>
+          <p className="text-xs text-muted-foreground leading-relaxed">
+            Ajusta el tamaño del texto en todo el panel. El cambio se guarda en este
+            dispositivo y aplica de inmediato.
+          </p>
+        </div>
+      </div>
+      <div className="mt-4 flex flex-wrap gap-2">
+        {FONT_SIZE_OPTIONS.map(opt => (
+          <Button
+            key={opt.value}
+            type="button"
+            size="sm"
+            variant={fontSize === opt.value ? 'default' : 'outline'}
+            onClick={() => setFontSize(opt.value)}
+          >
+            <span style={{ fontSize: `${opt.scale}em` }}>A</span>
+            <span className="ml-1.5">{opt.label}</span>
+          </Button>
+        ))}
+      </div>
+    </Card>
+  );
+}
+
 // ─── Componente principal ───────────────────────────────────────────────────────
 export default function ConfiguracionClient({ usuarios: initial, usuarioActualId }: Props) {
   const [usuarios] = useState(initial);
@@ -183,7 +221,7 @@ export default function ConfiguracionClient({ usuarios: initial, usuarioActualId
   const [eliminarTarget, setEliminarTarget] = useState<Usuario | null>(null);
   const [pending, startTransition] = useTransition();
   const [descargando, setDescargando] = useState(false);
-  const [tab, setTab] = useState<'usuarios' | 'respaldo' | 'datos'>('usuarios');
+  const [tab, setTab] = useState<'usuarios' | 'apariencia' | 'respaldo' | 'datos'>('usuarios');
   const [permisosTarget, setPermisosTarget] = useState<Usuario | null>(null);
   const [permisosValores, setPermisosValores] = useState<PermisosMap>({});
   const [permisosCargando, setPermisosCargando] = useState(false);
@@ -404,9 +442,10 @@ export default function ConfiguracionClient({ usuarios: initial, usuarioActualId
         <Text variant="description">Administra usuarios, permisos y el respaldo de la base de datos</Text>
       </div>
 
-      <Tabs value={tab} onValueChange={v => setTab(v as 'usuarios' | 'respaldo' | 'datos')}>
+      <Tabs value={tab} onValueChange={v => setTab(v as 'usuarios' | 'apariencia' | 'respaldo' | 'datos')}>
         <TabsList>
           <TabsTrigger value="usuarios"><ShieldCheck size={13} className="mr-1.5" />Usuarios y permisos</TabsTrigger>
+          <TabsTrigger value="apariencia"><Type size={13} className="mr-1.5" />Apariencia</TabsTrigger>
           <TabsTrigger value="respaldo"><Database size={13} className="mr-1.5" />Respaldo</TabsTrigger>
           <TabsTrigger value="datos"><TriangleAlert size={13} className="mr-1.5" />Datos</TabsTrigger>
         </TabsList>
@@ -419,6 +458,10 @@ export default function ConfiguracionClient({ usuarios: initial, usuarioActualId
             </Button>
           </div>
           <DataTable columns={columns} data={usuarios} emptyMessage="Sin usuarios." pageSize={20} />
+        </TabsContent>
+
+        <TabsContent value="apariencia" className="pt-4">
+          <AparienciaTab />
         </TabsContent>
 
         <TabsContent value="respaldo" className="pt-4">

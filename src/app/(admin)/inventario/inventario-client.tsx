@@ -1,49 +1,27 @@
 'use client';
 import { reload } from '@/hooks/use-reload';
 
-import { useState, useTransition } from 'react';
+import { useState, useTransition, useMemo, useCallback } from 'react';
 import { useForm, Controller } from 'react-hook-form';
 import { toast } from 'sonner';
 import { ColumnDef } from '@tanstack/react-table';
 import { Button } from '@/components/ui/button';
-import { ClipboardList, X, Package, ArrowUpCircle, ArrowDownCircle, Search, PencilLine } from 'lucide-react';
+import { ClipboardList, X, Package, ArrowUpCircle, ArrowDownCircle, Search, PencilLine, Trash2Icon } from 'lucide-react';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
 import { Dialog as DialogPrimitive } from '@base-ui/react/dialog';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { DataTable } from '@/components/ui/data-table';
+import { ConfirmDialog } from '@/components/ui/confirm-dialog';
 import { FormField, TextareaField } from '@/components/ui/form-field';
 import { Text } from '@/components/ui/text';
-import { registrarMovimiento } from '@/actions/inventario';
+import { registrarMovimiento, eliminarMovimiento } from '@/actions/inventario';
 import { formatDateTime, cn } from '@/lib/utils';
 import { zodResolver, movimientoSchema, type MovimientoFormValues } from '@/lib/validations';
 import type { MovimientoInventario, Producto } from '@/types';
 
 const TIPO_LABELS = { entrada: 'Entrada', salida: 'Salida' } as const;
 const MOTIVO_LABELS = { venta: 'Venta', devolucion: 'Devolución', compra: 'Compra', ajuste: 'Ajuste' } as const;
-
-const COLUMNS: ColumnDef<MovimientoInventario>[] = [
-  { accessorKey: 'producto_nombre', header: 'Producto' },
-  {
-    accessorKey: 'tipo', header: 'Tipo',
-    cell: ({ row }) => (
-      <Badge
-        variant={'outline'}
-        className={row.original.tipo === 'entrada' ? 'text-green-700 border-green-300' : 'text-red-600 border-red-300'}
-      >
-        {TIPO_LABELS[row.original.tipo]}
-      </Badge>
-    ),
-  },
-  {
-    accessorKey: 'motivo', header: 'Motivo',
-    cell: ({ row }) => <span className="capitalize text-muted-foreground text-sm">{MOTIVO_LABELS[row.original.motivo]}</span>,
-  },
-  { accessorKey: 'cantidad', header: 'Cantidad', cell: ({ row }) => <span className="font-semibold font-mono">{row.original.cantidad}</span> },
-  { accessorKey: 'usuario_nombre', header: 'Usuario', cell: ({ row }) => <span className="text-muted-foreground text-sm">{row.original.usuario_nombre}</span> },
-  { accessorKey: 'referencia', header: 'Referencia', cell: ({ row }) => <span className="font-mono text-xs text-muted-foreground">{row.original.referencia ?? '—'}</span> },
-  { accessorKey: 'creado_at', header: 'Fecha', cell: ({ row }) => <span className="text-muted-foreground text-sm tabular-nums">{formatDateTime(row.original.creado_at)}</span> },
-];
 
 // ─── Campo con etiqueta, estilo minimalista consistente con la ficha de producto ──
 function Campo({ label, hint, children }: { label: string; hint?: string; children: React.ReactNode }) {
@@ -228,7 +206,7 @@ function MovimientoForm({
               control={control}
               render={({ field }) => (
                 <Select
-                  items={{ compra: 'Compra', devolucion: 'Devolución', ajuste: 'Ajuste', venta: 'Venta manual' }}
+                  items={{ compra: 'Compra', devolucion: 'Devolución', ajuste: 'Ajuste' }}
                   value={field.value}
                   onValueChange={field.onChange}
                 >
@@ -237,7 +215,6 @@ function MovimientoForm({
                     <SelectItem value="compra">Compra</SelectItem>
                     <SelectItem value="devolucion">Devolución</SelectItem>
                     <SelectItem value="ajuste">Ajuste</SelectItem>
-                    <SelectItem value="venta">Venta manual</SelectItem>
                   </SelectContent>
                 </Select>
               )}
@@ -290,11 +267,12 @@ function MovimientoForm({
 }
 
 export default function InventarioClient({
-  movimientos: initial, productos,
-}: { movimientos: MovimientoInventario[]; productos: Producto[] }) {
+  movimientos: initial, productos, permisos,
+}: { movimientos: MovimientoInventario[]; productos: Producto[]; permisos: { eliminar: boolean } }) {
   const [modal, setModal] = useState(false);
   const [busqueda, setBusqueda] = useState('');
   const [pending, startTransition] = useTransition();
+  const [confirmTarget, setConfirmTarget] = useState<MovimientoInventario | null>(null);
 
   const filtrados = busqueda
     ? initial.filter(m => (m.producto_nombre ?? '').toLowerCase().includes(busqueda.toLowerCase()))
@@ -317,6 +295,58 @@ export default function InventarioClient({
     });
   }
 
+  const handleEliminar = useCallback(() => {
+    if (!confirmTarget) return;
+    startTransition(async () => {
+      const r = await eliminarMovimiento(confirmTarget.id);
+      if (r?.error) { toast.error(r.error); return; }
+      toast.success('Movimiento eliminado y stock revertido.');
+      setConfirmTarget(null);
+      reload();
+    });
+  }, [confirmTarget]);
+
+  const columns = useMemo<ColumnDef<MovimientoInventario>[]>(() => [
+    { accessorKey: 'producto_nombre', header: 'Producto' },
+    {
+      accessorKey: 'tipo', header: 'Tipo',
+      cell: ({ row }) => (
+        <Badge
+          variant={'outline'}
+          className={row.original.tipo === 'entrada' ? 'text-green-700 border-green-300' : 'text-red-600 border-red-300'}
+        >
+          {TIPO_LABELS[row.original.tipo]}
+        </Badge>
+      ),
+    },
+    {
+      accessorKey: 'motivo', header: 'Motivo',
+      cell: ({ row }) => <span className="capitalize text-muted-foreground text-sm">{MOTIVO_LABELS[row.original.motivo]}</span>,
+    },
+    { accessorKey: 'cantidad', header: 'Cantidad', cell: ({ row }) => <span className="font-semibold font-mono">{row.original.cantidad}</span> },
+    { accessorKey: 'usuario_nombre', header: 'Usuario', cell: ({ row }) => <span className="text-muted-foreground text-sm">{row.original.usuario_nombre}</span> },
+    { accessorKey: 'referencia', header: 'Referencia', cell: ({ row }) => <span className="font-mono text-xs text-muted-foreground">{row.original.referencia ?? '—'}</span> },
+    { accessorKey: 'creado_at', header: 'Fecha', cell: ({ row }) => <span className="text-muted-foreground text-sm tabular-nums">{formatDateTime(row.original.creado_at)}</span> },
+    ...(permisos.eliminar ? [{
+      id: 'actions', header: '',
+      cell: ({ row }: { row: { original: MovimientoInventario } }) => (
+        row.original.motivo === 'venta' ? null : (
+          <div className="flex justify-end">
+            <Button
+              variant="ghost"
+              size="icon-sm"
+              aria-label="Eliminar movimiento"
+              onClick={() => setConfirmTarget(row.original)}
+              className="text-destructive hover:text-destructive"
+            >
+              <Trash2Icon className="size-4" />
+            </Button>
+          </div>
+        )
+      ),
+    } as ColumnDef<MovimientoInventario>] : []),
+  ], [permisos.eliminar]);
+
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
@@ -337,7 +367,7 @@ export default function InventarioClient({
         className="max-w-sm"
       />
 
-      <DataTable columns={COLUMNS} data={filtrados} emptyMessage="Sin movimientos." pageSize={20} />
+      <DataTable columns={columns} data={filtrados} emptyMessage="Sin movimientos." pageSize={20} />
 
       <DialogPrimitive.Root open={modal} onOpenChange={setModal}>
         <DialogPrimitive.Portal>
@@ -381,6 +411,20 @@ export default function InventarioClient({
           </DialogPrimitive.Popup>
         </DialogPrimitive.Portal>
       </DialogPrimitive.Root>
+
+      <ConfirmDialog
+        open={confirmTarget !== null}
+        onOpenChange={open => !open && setConfirmTarget(null)}
+        title="Eliminar movimiento"
+        description={
+          confirmTarget
+            ? `¿Eliminar este movimiento de ${confirmTarget.cantidad} ${TIPO_LABELS[confirmTarget.tipo].toLowerCase()} de "${confirmTarget.producto_nombre}"? El stock se ajustará automáticamente para revertirlo.`
+            : ''
+        }
+        confirmLabel="Sí, eliminar"
+        onConfirm={handleEliminar}
+        pending={pending}
+      />
     </div>
   );
 }

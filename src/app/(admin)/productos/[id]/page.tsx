@@ -26,7 +26,7 @@ export default async function ProductoPage({ params }: Props) {
     getMovimientos(productoId),
   ]);
 
-  if (!producto) notFound();
+  if (!producto || Number(producto.activo) !== 1) notFound();
   
 
   return (
