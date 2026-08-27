@@ -35,18 +35,27 @@ export const productoSchema = z.object({
 export type ProductoFormValues = z.infer<typeof productoSchema>;
 
 // ─── Movimiento Inventario ────────────────────────────────────────────────────
-export const movimientoSchema = z.object({
-  producto_id: z.string().min(1, 'Selecciona un producto'),
+// Una línea del lote: solo lo que varía por producto. Referencia/notas se
+// capturan una vez para todo el lote (ver movimientosBatchSchema) porque en
+// la práctica describen el evento completo (una compra, un conteo físico),
+// no cada producto individual.
+const movimientoLineaSchema = z.object({
+  producto_id: z.coerce.number().int().positive('Producto inválido'),
   tipo:        z.enum(['entrada', 'salida']),
   // 'venta' se excluye a propósito: esos movimientos solo los genera el
   // flujo de venta (ver actions/ventas.ts), nunca el registro manual — así
   // el motivo sirve como señal confiable de qué movimientos son intocables.
   motivo:      z.enum(['devolucion', 'compra', 'ajuste']),
   cantidad:    z.coerce.number().int().positive('La cantidad debe ser mayor a 0'),
+});
+export type MovimientoLineaValues = z.infer<typeof movimientoLineaSchema>;
+
+export const movimientosBatchSchema = z.object({
+  lineas:      z.array(movimientoLineaSchema).min(1, 'Agrega al menos un producto'),
   referencia:  z.string().max(100).optional().or(z.literal('')),
   notas:       z.string().max(500).optional().or(z.literal('')),
 });
-export type MovimientoFormValues = z.infer<typeof movimientoSchema>;
+export type MovimientosBatchFormValues = z.infer<typeof movimientosBatchSchema>;
 
 // ─── Apertura de caja ─────────────────────────────────────────────────────────
 export const abrirCajaSchema = z.object({

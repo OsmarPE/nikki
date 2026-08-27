@@ -2,11 +2,10 @@
 import { reload } from '@/hooks/use-reload';
 
 import { useState, useTransition, useMemo, useCallback } from 'react';
-import { useForm, Controller } from 'react-hook-form';
 import { toast } from 'sonner';
 import { ColumnDef } from '@tanstack/react-table';
 import { Button } from '@/components/ui/button';
-import { ClipboardList, X, Package, ArrowUpCircle, ArrowDownCircle, Search, PencilLine, Trash2Icon } from 'lucide-react';
+import { ClipboardList, X, Package, ArrowUpCircle, ArrowDownCircle, Search, Check, Trash2Icon } from 'lucide-react';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
 import { Dialog as DialogPrimitive } from '@base-ui/react/dialog';
@@ -15,9 +14,9 @@ import { DataTable } from '@/components/ui/data-table';
 import { ConfirmDialog } from '@/components/ui/confirm-dialog';
 import { FormField, TextareaField } from '@/components/ui/form-field';
 import { Text } from '@/components/ui/text';
-import { registrarMovimiento, eliminarMovimiento } from '@/actions/inventario';
+import { registrarMovimientosBatch, eliminarMovimiento, type MovimientoBatchLinea } from '@/actions/inventario';
 import { formatDateTime, cn } from '@/lib/utils';
-import { zodResolver, movimientoSchema, type MovimientoFormValues } from '@/lib/validations';
+import { movimientosBatchSchema } from '@/lib/validations';
 import type { MovimientoInventario, Producto } from '@/types';
 
 const TIPO_LABELS = { entrada: 'Entrada', salida: 'Salida' } as const;
@@ -37,13 +36,16 @@ function Campo({ label, hint, children }: { label: string; hint?: string; childr
 }
 
 // ─── Tarjeta compacta de producto (grilla del buscador) ────────────────────────
-function ProductoCard({ p, onClick }: { p: Producto; onClick: () => void }) {
+function ProductoCard({ p, onClick, added }: { p: Producto; onClick: () => void; added?: boolean }) {
   const stock = Number(p.stock ?? 0);
   return (
     <button
       type="button"
       onClick={onClick}
-      className="flex items-center gap-2.5 rounded-lg border border-border px-2.5 py-2 text-left transition-colors hover:border-foreground/30 hover:bg-muted/40"
+      className={cn(
+        'flex items-center gap-2.5 rounded-lg border px-2.5 py-2 text-left transition-colors',
+        added ? 'border-foreground/30 bg-muted/40' : 'border-border hover:border-foreground/30 hover:bg-muted/40',
+      )}
     >
       {p.imagen_url ? (
         // eslint-disable-next-line @next/next/no-img-element
@@ -57,51 +59,23 @@ function ProductoCard({ p, onClick }: { p: Producto; onClick: () => void }) {
         <p className="text-xs font-medium truncate">{p.nombre}</p>
         <span className="text-[10px] font-mono text-muted-foreground">{p.sku}</span>
       </div>
-      <Badge variant="outline" className="text-[10px] h-4 px-1 shrink-0">{stock}</Badge>
+      {added ? <Check size={13} className="text-foreground shrink-0" /> : (
+        <Badge variant="outline" className="text-[10px] h-4 px-1 shrink-0">{stock}</Badge>
+      )}
     </button>
   );
 }
 
-// ─── Buscador de producto: grilla filtrable + tarjeta de seleccionado ─────────
-function ProductoPicker({
-  productos, value, onChange, error,
+// ─── Buscador: grilla filtrable que agrega productos al lote (no "selecciona
+// uno", agrega N — clic repetido sobre el mismo producto suma cantidad) ───────
+function BuscadorProductoLote({
+  productos, lineas, onAgregar,
 }: {
   productos: Producto[];
-  value: string;
-  onChange: (id: string) => void;
-  error?: string;
+  lineas: LineaMovimiento[];
+  onAgregar: (p: Producto) => void;
 }) {
   const [query, setQuery] = useState('');
-  const seleccionado = productos.find(p => String(p.id) === value) ?? null;
-
-  if (seleccionado) {
-    const stock = Number(seleccionado.stock ?? 0);
-    return (
-      <div className="rounded-xl border border-border bg-muted/20 px-4 py-3.5 flex items-center gap-3.5">
-        {seleccionado.imagen_url ? (
-          // eslint-disable-next-line @next/next/no-img-element
-          <img src={seleccionado.imagen_url} alt={seleccionado.nombre}
-            className="h-12 w-12 rounded-lg object-cover shrink-0" />
-        ) : (
-          <div className="h-12 w-12 rounded-lg bg-muted flex items-center justify-center shrink-0">
-            <Package size={18} className="text-muted-foreground" />
-          </div>
-        )}
-        <div className="flex-1 min-w-0">
-          <p className="text-sm font-semibold truncate">{seleccionado.nombre}</p>
-          <div className="flex items-center gap-1.5 mt-0.5">
-            <span className="text-[11px] font-mono text-muted-foreground">{seleccionado.sku}</span>
-            <Badge variant="outline" className="text-[10px] h-4 px-1">{stock} disp.</Badge>
-          </div>
-        </div>
-        <Button type="button" variant="outline" size="sm" onClick={() => { setQuery(''); onChange(''); }}>
-          <PencilLine size={12} />
-          Cambiar
-        </Button>
-      </div>
-    );
-  }
-
   const filtrados = query.trim()
     ? productos.filter(p =>
         p.nombre.toLowerCase().includes(query.trim().toLowerCase()) ||
@@ -114,80 +88,200 @@ function ProductoPicker({
         <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
         <Input
           autoFocus
-          placeholder="Buscar por nombre o SKU…"
+          placeholder="Buscar por nombre o SKU para agregar al lote…"
           value={query}
           onChange={e => setQuery(e.target.value)}
-          className={cn('pl-8 h-9', error && 'border-destructive')}
+          className="pl-8 h-9"
         />
       </div>
       {filtrados.length === 0 ? (
-        <div className="rounded-xl border border-dashed border-border px-4 py-8 text-center text-xs text-muted-foreground">
+        <div className="rounded-xl border border-dashed border-border px-4 py-6 text-center text-xs text-muted-foreground">
           Sin resultados para &quot;{query}&quot;
         </div>
       ) : (
-        <div className="grid grid-cols-2 gap-2 max-h-64 overflow-y-auto pr-0.5">
+        <div className="grid grid-cols-2 gap-2 max-h-40 overflow-y-auto pr-0.5">
           {filtrados.map(p => (
-            <ProductoCard key={p.id} p={p} onClick={() => onChange(String(p.id))} />
+            <ProductoCard
+              key={p.id}
+              p={p}
+              added={lineas.some(l => l.producto.id === p.id)}
+              onClick={() => onAgregar(p)}
+            />
           ))}
         </div>
       )}
-      {error && <p className="text-[11px] text-destructive">{error}</p>}
     </div>
   );
 }
 
-function MovimientoForm({
+interface LineaMovimiento {
+  producto: Producto;
+  tipo: 'entrada' | 'salida';
+  motivo: 'devolucion' | 'compra' | 'ajuste';
+  cantidad: number | '';
+}
+
+// ─── Fila editable de una línea del lote ──────────────────────────────────────
+function LineaRow({
+  linea, onChange, onRemove,
+}: {
+  linea: LineaMovimiento;
+  onChange: (patch: Partial<LineaMovimiento>) => void;
+  onRemove: () => void;
+}) {
+  const stock = Number(linea.producto.stock ?? 0);
+  return (
+    <div className="flex items-center gap-2.5 py-2 border-b border-border/60 last:border-b-0">
+      <div className="flex items-center gap-2.5 flex-1 min-w-0">
+        {linea.producto.imagen_url ? (
+          // eslint-disable-next-line @next/next/no-img-element
+          <img src={linea.producto.imagen_url} alt={linea.producto.nombre} className="h-9 w-9 rounded-md object-cover shrink-0" />
+        ) : (
+          <div className="h-9 w-9 rounded-md bg-muted flex items-center justify-center shrink-0">
+            <Package size={13} className="text-muted-foreground" />
+          </div>
+        )}
+        <div className="min-w-0">
+          <p className="text-xs font-medium truncate">{linea.producto.nombre}</p>
+          <span className="text-[10px] font-mono text-muted-foreground">{linea.producto.sku} · {stock} disp.</span>
+        </div>
+      </div>
+
+      <div className="inline-flex rounded-lg border border-border bg-muted/30 p-0.5 shrink-0">
+        {(['entrada', 'salida'] as const).map(t => (
+          <button
+            key={t}
+            type="button"
+            onClick={() => onChange({ tipo: t })}
+            aria-label={t}
+            className={cn(
+              'inline-flex items-center justify-center rounded-md h-7 w-7 transition-all',
+              linea.tipo === t
+                ? t === 'entrada' ? 'bg-background shadow-sm text-green-700' : 'bg-background shadow-sm text-red-600'
+                : 'text-muted-foreground hover:text-foreground',
+            )}
+          >
+            {t === 'entrada' ? <ArrowUpCircle size={13} /> : <ArrowDownCircle size={13} />}
+          </button>
+        ))}
+      </div>
+
+      <Select
+        items={{ compra: 'Compra', devolucion: 'Devolución', ajuste: 'Ajuste' }}
+        value={linea.motivo}
+        onValueChange={v => onChange({ motivo: v as LineaMovimiento['motivo'] })}
+      >
+        <SelectTrigger className="h-8 w-28 text-xs shrink-0"><SelectValue /></SelectTrigger>
+        <SelectContent>
+          <SelectItem value="compra">Compra</SelectItem>
+          <SelectItem value="devolucion">Devolución</SelectItem>
+          <SelectItem value="ajuste">Ajuste</SelectItem>
+        </SelectContent>
+      </Select>
+
+      <Input
+        type="number"
+        min={1}
+        value={linea.cantidad}
+        onChange={e => onChange({ cantidad: e.target.value === '' ? '' : Number(e.target.value) })}
+        className="h-8 w-16 text-xs text-center shrink-0"
+      />
+
+      <Button
+        type="button"
+        variant="ghost"
+        size="icon-sm"
+        onClick={onRemove}
+        className="shrink-0 text-muted-foreground hover:text-destructive"
+        aria-label="Quitar del lote"
+      >
+        <X size={13} />
+      </Button>
+    </div>
+  );
+}
+
+function MovimientosBatchForm({
   productos, onSubmit, pending, onCancel,
 }: {
   productos: Producto[];
-  onSubmit: (data: MovimientoFormValues) => void;
+  onSubmit: (data: { lineas: MovimientoBatchLinea[]; referencia?: string; notas?: string }) => void;
   pending: boolean;
   onCancel: () => void;
 }) {
-  const { register, handleSubmit, control, formState: { errors } } = useForm<MovimientoFormValues>({
-    resolver: zodResolver(movimientoSchema),
-    defaultValues: { producto_id: '', tipo: 'entrada', motivo: 'compra', cantidad: '' as unknown as number, referencia: '', notas: '' },
-  });
+  const [lineas, setLineas] = useState<LineaMovimiento[]>([]);
+  const [tipoDefault, setTipoDefault] = useState<'entrada' | 'salida'>('entrada');
+  const [motivoDefault, setMotivoDefault] = useState<'devolucion' | 'compra' | 'ajuste'>('compra');
+  const [referencia, setReferencia] = useState('');
+  const [notas, setNotas] = useState('');
+  const [error, setError] = useState<string | null>(null);
+
+  function agregarProducto(p: Producto) {
+    setError(null);
+    setLineas(prev => {
+      const existente = prev.find(l => l.producto.id === p.id);
+      if (existente) {
+        return prev.map(l => l.producto.id === p.id
+          ? { ...l, cantidad: (Number(l.cantidad) || 0) + 1 }
+          : l);
+      }
+      return [...prev, { producto: p, tipo: tipoDefault, motivo: motivoDefault, cantidad: 1 }];
+    });
+  }
+
+  function actualizarLinea(productoId: number, patch: Partial<LineaMovimiento>) {
+    setLineas(prev => prev.map(l => l.producto.id === productoId ? { ...l, ...patch } : l));
+  }
+
+  function eliminarLinea(productoId: number) {
+    setLineas(prev => prev.filter(l => l.producto.id !== productoId));
+  }
+
+  function aplicarATodas() {
+    setLineas(prev => prev.map(l => ({ ...l, tipo: tipoDefault, motivo: motivoDefault })));
+  }
+
+  function handleFormSubmit() {
+    const payload = {
+      lineas: lineas.map(l => ({
+        producto_id: l.producto.id,
+        tipo: l.tipo,
+        motivo: l.motivo,
+        cantidad: l.cantidad,
+      })),
+      referencia: referencia || undefined,
+      notas: notas || undefined,
+    };
+    const parsed = movimientosBatchSchema.safeParse(payload);
+    if (!parsed.success) {
+      setError(parsed.error.issues[0]?.message ?? 'Revisa los datos del lote.');
+      return;
+    }
+    setError(null);
+    onSubmit(parsed.data as { lineas: MovimientoBatchLinea[]; referencia?: string; notas?: string });
+  }
 
   return (
-    <form onSubmit={handleSubmit(onSubmit)} className="flex flex-col">
-      <div className="px-7 py-6 space-y-6">
-
-        {/* Producto */}
-        <Campo label="Producto">
-          <Controller
-            name="producto_id"
-            control={control}
-            render={({ field }) => (
-              <ProductoPicker
-                productos={productos}
-                value={field.value}
-                onChange={field.onChange}
-                error={errors.producto_id?.message}
-              />
-            )}
-          />
+    <div className="flex flex-col">
+      <div className="px-7 py-6 space-y-5">
+        <Campo label="Agregar productos al lote">
+          <BuscadorProductoLote productos={productos} lineas={lineas} onAgregar={agregarProducto} />
         </Campo>
 
-        {/* Tipo, motivo, cantidad */}
-        <div className="grid grid-cols-3 gap-4">
-          <Campo label="Tipo">
-            <Controller
-              name="tipo"
-              control={control}
-              render={({ field }) => (
-                <div className="inline-flex w-full rounded-lg border border-border bg-muted/30 p-0.5">
+        {lineas.length > 0 && (
+          <>
+            <div className="flex items-end gap-3 rounded-lg border border-dashed border-border px-3 py-2.5">
+              <Campo label="Tipo por defecto">
+                <div className="inline-flex rounded-lg border border-border bg-muted/30 p-0.5">
                   {(['entrada', 'salida'] as const).map(t => (
                     <button
                       key={t}
                       type="button"
-                      onClick={() => field.onChange(t)}
+                      onClick={() => setTipoDefault(t)}
                       className={cn(
-                        'flex-1 inline-flex items-center justify-center gap-1.5 rounded-md h-8 text-xs font-semibold transition-all',
-                        field.value === t
-                          ? t === 'entrada'
-                            ? 'bg-background shadow-sm text-green-700'
-                            : 'bg-background shadow-sm text-red-600'
+                        'inline-flex items-center justify-center gap-1.5 rounded-md h-8 px-2.5 text-xs font-semibold transition-all',
+                        tipoDefault === t
+                          ? t === 'entrada' ? 'bg-background shadow-sm text-green-700' : 'bg-background shadow-sm text-red-600'
                           : 'text-muted-foreground hover:text-foreground',
                       )}
                     >
@@ -196,73 +290,82 @@ function MovimientoForm({
                     </button>
                   ))}
                 </div>
-              )}
-            />
-          </Campo>
+              </Campo>
 
-          <Campo label="Motivo">
-            <Controller
-              name="motivo"
-              control={control}
-              render={({ field }) => (
+              <Campo label="Motivo por defecto">
                 <Select
                   items={{ compra: 'Compra', devolucion: 'Devolución', ajuste: 'Ajuste' }}
-                  value={field.value}
-                  onValueChange={field.onChange}
+                  value={motivoDefault}
+                  onValueChange={v => setMotivoDefault(v as typeof motivoDefault)}
                 >
-                  <SelectTrigger className="h-9 w-full text-sm"><SelectValue /></SelectTrigger>
+                  <SelectTrigger className="h-8 w-32 text-xs"><SelectValue /></SelectTrigger>
                   <SelectContent>
                     <SelectItem value="compra">Compra</SelectItem>
                     <SelectItem value="devolucion">Devolución</SelectItem>
                     <SelectItem value="ajuste">Ajuste</SelectItem>
                   </SelectContent>
                 </Select>
-              )}
-            />
-          </Campo>
+              </Campo>
 
-          <FormField
-            label="Cantidad"
-            type="number"
-            min="1"
-            placeholder="0"
-            error={errors.cantidad?.message}
-            className="h-9"
-            {...register('cantidad')}
-          />
-        </div>
+              <Button type="button" variant="outline" size="sm" onClick={aplicarATodas}>
+                Aplicar a las {lineas.length} líneas
+              </Button>
+            </div>
 
-        {/* Referencia y notas */}
-        <div className="grid grid-cols-2 gap-4">
-          <FormField
-            label="Referencia"
-            hint="opcional"
-            placeholder="Ej. folio de compra"
-            error={errors.referencia?.message}
-            className="h-9"
-            {...register('referencia')}
-          />
-          <TextareaField
-            label="Notas"
-            hint="opcional"
-            rows={1}
-            placeholder="Observaciones adicionales…"
-            error={errors.notas?.message}
-            {...register('notas')}
-          />
-        </div>
+            <div className="rounded-xl border border-border px-3">
+              {lineas.map(l => (
+                <LineaRow
+                  key={l.producto.id}
+                  linea={l}
+                  onChange={patch => actualizarLinea(l.producto.id, patch)}
+                  onRemove={() => eliminarLinea(l.producto.id)}
+                />
+              ))}
+            </div>
+
+            <div className="grid grid-cols-2 gap-4">
+              <FormField
+                label="Referencia"
+                hint="opcional, aplica a todo el lote"
+                placeholder="Ej. folio de compra"
+                value={referencia}
+                onChange={e => setReferencia(e.target.value)}
+                className="h-9"
+              />
+              <TextareaField
+                label="Notas"
+                hint="opcional, aplica a todo el lote"
+                rows={1}
+                placeholder="Observaciones adicionales…"
+                value={notas}
+                onChange={e => setNotas(e.target.value)}
+              />
+            </div>
+          </>
+        )}
+
+        {error && <p className="text-[11px] text-destructive">{error}</p>}
       </div>
 
-      <div className="flex items-center justify-end gap-2 px-7 py-4 border-t border-border/60">
-        <Button type="button" variant="ghost" onClick={onCancel}>
-          <X size={13} />
-          Cancelar
-        </Button>
-        <Button type="submit" variant="default" size="sm" disabled={pending}>
-          {pending ? 'Registrando…' : 'Registrar movimiento'}
-        </Button>
+      <div className="flex items-center justify-between gap-2 px-7 py-4 border-t border-border/60">
+        <span className="text-xs text-muted-foreground">
+          {lineas.length > 0
+            ? `${lineas.length} producto${lineas.length === 1 ? '' : 's'} en el lote`
+            : 'Agrega productos para comenzar'}
+        </span>
+        <div className="flex items-center gap-2">
+          <Button type="button" variant="ghost" onClick={onCancel}>
+            <X size={13} />
+            Cancelar
+          </Button>
+          <Button type="button" variant="default" size="sm" disabled={pending || lineas.length === 0} onClick={handleFormSubmit}>
+            {pending
+              ? 'Registrando…'
+              : `Registrar ${lineas.length || ''} movimiento${lineas.length === 1 ? '' : 's'}`}
+          </Button>
+        </div>
       </div>
-    </form>
+    </div>
   );
 }
 
@@ -278,18 +381,15 @@ export default function InventarioClient({
     ? initial.filter(m => (m.producto_nombre ?? '').toLowerCase().includes(busqueda.toLowerCase()))
     : initial;
 
-  function handleSubmit(data: MovimientoFormValues) {
+  function handleSubmit(data: { lineas: MovimientoBatchLinea[]; referencia?: string; notas?: string }) {
     startTransition(async () => {
-      const r = await registrarMovimiento({
-        producto_id: parseInt(data.producto_id),
-        tipo: data.tipo,
-        motivo: data.motivo,
-        cantidad: Number(data.cantidad),
-        referencia: data.referencia || undefined,
-        notas: data.notas || undefined,
-      });
+      const r = await registrarMovimientosBatch(data);
       if (r?.error) { toast.error(r.error); return; }
-      toast.success('Movimiento registrado.');
+      toast.success(
+        data.lineas.length === 1
+          ? 'Movimiento registrado.'
+          : `${data.lineas.length} movimientos registrados.`,
+      );
       setModal(false);
       reload();
     });
@@ -356,7 +456,7 @@ export default function InventarioClient({
         </div>
         <Button variant={'outline'} onClick={() => setModal(true)}>
         <ClipboardList size={13} />
-        Registrar movimiento
+        Registrar movimientos
       </Button>
       </div>
 
@@ -387,8 +487,8 @@ export default function InventarioClient({
                   <ClipboardList size={16} className="text-muted-foreground" />
                 </div>
                 <div>
-                  <DialogPrimitive.Title className="text-base font-semibold leading-tight">Registrar movimiento</DialogPrimitive.Title>
-                  <p className="text-xs text-muted-foreground mt-0.5">Actualiza el inventario de un producto</p>
+                  <DialogPrimitive.Title className="text-base font-semibold leading-tight">Registrar movimientos</DialogPrimitive.Title>
+                  <p className="text-xs text-muted-foreground mt-0.5">Agrega varios productos y regístralos en un solo lote</p>
                 </div>
               </div>
               <DialogPrimitive.Close render={<Button variant="ghost" size="icon" className="shrink-0" />}>
@@ -399,7 +499,7 @@ export default function InventarioClient({
 
             {modal && (
               <div className="overflow-y-auto">
-                <MovimientoForm
+                <MovimientosBatchForm
                   key={String(modal)}
                   productos={productos}
                   onSubmit={handleSubmit}

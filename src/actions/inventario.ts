@@ -25,57 +25,72 @@ export async function getMovimientos(productoId?: number): Promise<MovimientoInv
   return rows as MovimientoInventario[];
 }
 
-export async function registrarMovimiento(data: {
+export interface MovimientoBatchLinea {
   producto_id: number;
   tipo: 'entrada' | 'salida';
-  motivo: 'venta' | 'devolucion' | 'compra' | 'ajuste';
+  motivo: 'devolucion' | 'compra' | 'ajuste';
   cantidad: number;
+}
+
+// Registra N movimientos (uno por línea) como una sola operación atómica: si
+// una línea falla (producto inexistente, stock insuficiente) se revierte todo
+// el lote, no solo esa línea, para no dejar el Kardex a medias.
+export async function registrarMovimientosBatch(data: {
+  lineas: MovimientoBatchLinea[];
   referencia?: string;
   notas?: string;
 }) {
   const session = await getSession();
   if (!session || !tienePermiso(session, 'inventario', 'crear')) return { error: 'Sin permiso.' };
-  if (data.cantidad <= 0) return { error: 'La cantidad debe ser mayor a 0.' };
+  if (data.lineas.length === 0) return { error: 'Agrega al menos un producto.' };
+  if (data.lineas.some(l => l.cantidad <= 0)) return { error: 'La cantidad debe ser mayor a 0.' };
 
   const conn = await pool.getConnection();
   try {
     await conn.beginTransaction();
 
-    // Bloquea la fila del producto (no todo el historial de movimientos) para
-    // evitar carreras entre movimientos concurrentes del mismo producto.
-    const [pRows] = await conn.query<RowDataPacket[]>(
-      `SELECT stock FROM productos WHERE id = ? FOR UPDATE`,
-      [data.producto_id]
-    );
-    if (!pRows[0]) {
-      await conn.rollback();
-      return { error: 'Producto no encontrado.' };
+    // Bloquea la fila de cada producto (no todo el historial de movimientos)
+    // para evitar carreras con movimientos concurrentes de los mismos
+    // productos. Se ordena por producto_id antes de tomar los locks para que
+    // dos lotes concurrentes con productos en común los bloqueen siempre en
+    // el mismo orden y no se produzca un deadlock cruzado entre ambos.
+    const ordenadas = [...data.lineas].sort((a, b) => a.producto_id - b.producto_id);
+
+    for (const linea of ordenadas) {
+      const [pRows] = await conn.query<RowDataPacket[]>(
+        `SELECT nombre, stock FROM productos WHERE id = ? FOR UPDATE`,
+        [linea.producto_id]
+      );
+      if (!pRows[0]) {
+        await conn.rollback();
+        return { error: `Producto #${linea.producto_id} no encontrado.` };
+      }
+      const stockActual = Number(pRows[0].stock);
+
+      if (linea.tipo === 'salida' && stockActual < linea.cantidad) {
+        await conn.rollback();
+        return { error: `Stock insuficiente para "${pRows[0].nombre}". Disponible: ${stockActual}` };
+      }
+
+      await conn.query(
+        `INSERT INTO movimientos_inventario (producto_id, tipo, motivo, cantidad, usuario_id, referencia, notas)
+         VALUES (?, ?, ?, ?, ?, ?, ?)`,
+        [linea.producto_id, linea.tipo, linea.motivo, linea.cantidad,
+         session.sub, data.referencia ?? null, data.notas ?? null]
+      );
+
+      const delta = linea.tipo === 'entrada' ? linea.cantidad : -linea.cantidad;
+      await conn.query(`UPDATE productos SET stock = stock + ? WHERE id = ?`, [delta, linea.producto_id]);
     }
-    const stockActual = Number(pRows[0].stock);
-
-    if (data.tipo === 'salida' && stockActual < data.cantidad) {
-      await conn.rollback();
-      return { error: `Stock insuficiente. Disponible: ${stockActual}` };
-    }
-
-    await conn.query(
-      `INSERT INTO movimientos_inventario (producto_id, tipo, motivo, cantidad, usuario_id, referencia, notas)
-       VALUES (?, ?, ?, ?, ?, ?, ?)`,
-      [data.producto_id, data.tipo, data.motivo, data.cantidad,
-       session.sub, data.referencia ?? null, data.notas ?? null]
-    );
-
-    const delta = data.tipo === 'entrada' ? data.cantidad : -data.cantidad;
-    await conn.query(`UPDATE productos SET stock = stock + ? WHERE id = ?`, [delta, data.producto_id]);
 
     await conn.commit();
     revalidatePath('/inventario');
     revalidatePath('/productos');
-    return { success: true };
+    return { success: true, registrados: data.lineas.length };
   } catch (e) {
     await conn.rollback();
     console.error(e);
-    return { error: 'Error al registrar el movimiento.' };
+    return { error: 'Error al registrar los movimientos.' };
   } finally {
     conn.release();
   }
