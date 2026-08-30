@@ -87,6 +87,8 @@ export interface Venta {
   usuario_id: number;
   sesion_caja_id: number;
   total: number;
+  descuento_porcentaje: number | null;
+  descuento_monto: number;
   metodo_pago: 'efectivo' | 'transferencia' | 'tarjeta';
   creado_at: string;
   cliente_nombre?: string;
@@ -117,7 +119,10 @@ export interface ItemCarrito {
 
 export interface ResultadoCarrito {
   items: ItemCarrito[];
+  subtotal: number;
   total: number;
   descuento_total: number;
   promocion_aplicada: boolean;
+  descuento_global_porcentaje: number | null;
+  descuento_global_monto: number;
 }

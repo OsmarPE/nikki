@@ -26,11 +26,16 @@ export async function procesarVenta(input: {
   cliente_id?: number | null;
   sesion_caja_id: number;
   productosConDescuento?: number[];
+  descuentoGlobalPorcentaje?: 10 | 20 | 30 | null;
 }) {
   const session = await getSession();
   if (!session) return { error: 'Sin sesión.' };
 
-  const { items, total } = calcularCarrito(input.lineas, input.productosConDescuento ?? []);
+  const { items, total, descuento_global_porcentaje, descuento_global_monto } = calcularCarrito(
+    input.lineas,
+    input.productosConDescuento ?? [],
+    input.descuentoGlobalPorcentaje ?? null,
+  );
   if (items.length === 0) return { error: 'El carrito está vacío.' };
 
   const conn = await pool.getConnection();
@@ -64,9 +69,12 @@ export async function procesarVenta(input: {
 
     // Insertar venta
     const [ventaResult] = await conn.query<ResultSetHeader>(
-      `INSERT INTO ventas (folio, cliente_id, usuario_id, sesion_caja_id, total, metodo_pago)
-       VALUES (?, ?, ?, ?, ?, ?)`,
-      [folio, input.cliente_id ?? null, session.sub, input.sesion_caja_id, total, input.metodo_pago]
+      `INSERT INTO ventas (folio, cliente_id, usuario_id, sesion_caja_id, total, descuento_porcentaje, descuento_monto, metodo_pago)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+      [
+        folio, input.cliente_id ?? null, session.sub, input.sesion_caja_id,
+        total, descuento_global_porcentaje, descuento_global_monto, input.metodo_pago,
+      ]
     );
     const ventaId = ventaResult.insertId;
 

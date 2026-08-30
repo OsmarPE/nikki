@@ -52,10 +52,11 @@ function StatCard({
 export default function VentaDetalleView({ venta }: { venta: Venta }) {
   const router = useRouter();
 
-  const detalles        = venta.detalles ?? [];
-  const descuentoTotal  = detalles.reduce((s, d) => s + Number(d.descuento_aplicado ?? 0), 0);
-  const subtotalBruto   = detalles.reduce((s, d) => s + Number(d.subtotal) + Number(d.descuento_aplicado ?? 0), 0);
-  const hayDescuento    = descuentoTotal > 0;
+  const detalles          = venta.detalles ?? [];
+  const descuentoTotal    = detalles.reduce((s, d) => s + Number(d.descuento_aplicado ?? 0), 0);
+  const subtotalBruto     = detalles.reduce((s, d) => s + Number(d.subtotal) + Number(d.descuento_aplicado ?? 0), 0);
+  const descuentoGlobal   = Number(venta.descuento_monto ?? 0);
+  const hayDescuento      = descuentoTotal > 0 || descuentoGlobal > 0;
 
   return (
     <div className="max-w-3xl space-y-6">
@@ -214,12 +215,24 @@ export default function VentaDetalleView({ venta }: { venta: Venta }) {
                   <span className="text-muted-foreground">Subtotal</span>
                   <span className="tabular-nums w-28 text-right">{formatCurrency(subtotalBruto)}</span>
                 </div>
-                <div className="flex items-center gap-12">
-                  <span className="text-green-700 font-medium">Descuento</span>
-                  <span className="tabular-nums w-28 text-right text-green-700 font-medium">
-                    −{formatCurrency(descuentoTotal)}
-                  </span>
-                </div>
+                {descuentoTotal > 0 && (
+                  <div className="flex items-center gap-12">
+                    <span className="text-green-700 font-medium">Descuento promoción</span>
+                    <span className="tabular-nums w-28 text-right text-green-700 font-medium">
+                      −{formatCurrency(descuentoTotal)}
+                    </span>
+                  </div>
+                )}
+                {descuentoGlobal > 0 && (
+                  <div className="flex items-center gap-12">
+                    <span className="text-green-700 font-medium">
+                      Descuento ({venta.descuento_porcentaje}%)
+                    </span>
+                    <span className="tabular-nums w-28 text-right text-green-700 font-medium">
+                      −{formatCurrency(descuentoGlobal)}
+                    </span>
+                  </div>
+                )}
                 <Separator className="my-1 w-52" />
               </>
             )}

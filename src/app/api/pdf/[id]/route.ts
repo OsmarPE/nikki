@@ -194,13 +194,23 @@ export async function GET(
   const totalX  = RIGHT;
   const labelX  = RIGHT - 120;
 
-  if (descuentoTotal > 0) {
+  const descuentoGlobal = Number(venta.descuento_monto ?? 0);
+
+  if (descuentoTotal > 0 || descuentoGlobal > 0) {
     t('Subtotal:',  labelX, y, { size: 9, color: C.gray, align: 'right' });
-    t(fmt(Number(venta.total) + descuentoTotal), totalX, y, { size: 9, align: 'right' });
+    t(fmt(Number(venta.total) + descuentoTotal + descuentoGlobal), totalX, y, { size: 9, align: 'right' });
     y -= 16;
-    t('Descuento:', labelX, y, { size: 9, color: C.gray, align: 'right' });
-    t(`−${fmt(descuentoTotal)}`, totalX, y, { size: 9, color: rgb(0.1, 0.5, 0.1), align: 'right' });
-    y -= 20;
+    if (descuentoTotal > 0) {
+      t('Descuento promoción:', labelX, y, { size: 9, color: C.gray, align: 'right' });
+      t(`−${fmt(descuentoTotal)}`, totalX, y, { size: 9, color: rgb(0.1, 0.5, 0.1), align: 'right' });
+      y -= 16;
+    }
+    if (descuentoGlobal > 0) {
+      t(`Descuento (${venta.descuento_porcentaje}%):`, labelX, y, { size: 9, color: C.gray, align: 'right' });
+      t(`−${fmt(descuentoGlobal)}`, totalX, y, { size: 9, color: rgb(0.1, 0.5, 0.1), align: 'right' });
+      y -= 16;
+    }
+    y -= 4;
   }
 
   // Total destacado

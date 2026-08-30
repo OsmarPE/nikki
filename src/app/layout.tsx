@@ -16,7 +16,7 @@ const FONT_SIZE_INIT_SCRIPT = `(function(){try{var s=localStorage.getItem('nikki
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
-    <html lang="es">
+    <html lang="es" suppressHydrationWarning>
       <body className={`${outfit.className} bg-background text-foreground antialiased min-h-screen`}>
         <Script id="font-size-init" strategy="beforeInteractive">
           {FONT_SIZE_INIT_SCRIPT}

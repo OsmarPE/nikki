@@ -32,7 +32,10 @@ import type { Producto, Cliente } from '@/types';
 // ─── Tipos locales ─────────────────────────────────────────────────────────────
 interface LineaCarrito { producto: Producto; cantidad: number }
 type MetodoPago = 'efectivo' | 'transferencia' | 'tarjeta';
+type DescuentoGlobal = 10 | 20 | 30 | null;
 interface VentaExitosa { ventaId: number; folio: string }
+
+const OPCIONES_DESCUENTO_GLOBAL = [10, 20, 30] as const;
 
 const PASOS = [
   { n: 1, label: 'Productos',  icon: ShoppingCart },
@@ -91,18 +94,52 @@ function Stepper({ paso }: { paso: number }) {
   );
 }
 
+// ─── Selector de descuento global (10/20/30%) ──────────────────────────────────
+function SelectorDescuentoGlobal({
+  valor, onChange,
+}: {
+  valor: DescuentoGlobal;
+  onChange: (v: DescuentoGlobal) => void;
+}) {
+  return (
+    <div className="flex items-center justify-between">
+      <span className="text-xs font-medium text-muted-foreground">Descuento adicional</span>
+      <div className="flex items-center gap-1.5">
+        {OPCIONES_DESCUENTO_GLOBAL.map(pct => (
+          <button
+            key={pct}
+            type="button"
+            onClick={() => onChange(valor === pct ? null : pct)}
+            className={cn(
+              'px-2.5 py-1 rounded-md text-xs font-semibold border transition-colors',
+              valor === pct
+                ? 'bg-foreground text-background border-foreground'
+                : 'border-border hover:bg-muted',
+            )}
+          >
+            {pct}%
+          </button>
+        ))}
+      </div>
+    </div>
+  );
+}
+
 // ─── Paso 1 — Productos ────────────────────────────────────────────────────────
 function PasoProductos({
-  lineas, carrito, candidatosDescuento, productosConDescuento, onAbrirBuscador, onCantidad, onEliminar, onToggleDescuento,
+  lineas, carrito, candidatosDescuento, productosConDescuento, descuentoGlobalPct,
+  onAbrirBuscador, onCantidad, onEliminar, onToggleDescuento, onSetDescuentoGlobal,
 }: {
   lineas: LineaCarrito[];
   carrito: ReturnType<typeof calcularCarrito>;
   candidatosDescuento: ReturnType<typeof calcularCandidatosDescuento>;
   productosConDescuento: Set<number>;
+  descuentoGlobalPct: DescuentoGlobal;
   onAbrirBuscador: () => void;
   onCantidad: (id: number, delta: number) => void;
   onEliminar: (id: number) => void;
   onToggleDescuento: (id: number) => void;
+  onSetDescuentoGlobal: (v: DescuentoGlobal) => void;
 }) {
   return (
     <div className="space-y-4">
@@ -216,13 +253,25 @@ function PasoProductos({
           </div>
 
           {/* Totales */}
-          <div className="px-4 py-3 border-t border-border bg-muted/20 space-y-1">
+          <div className="px-4 py-3 border-t border-border bg-muted/20 space-y-2">
             {carrito.promocion_aplicada && (
               <div className="flex justify-between text-sm text-green-700">
                 <span className="font-medium">Descuento (promoción 4x3)</span>
                 <span className="tabular-nums font-semibold">−{formatCurrency(carrito.descuento_total)}</span>
               </div>
             )}
+
+            <SelectorDescuentoGlobal valor={descuentoGlobalPct} onChange={onSetDescuentoGlobal} />
+
+            {carrito.descuento_global_monto > 0 && (
+              <div className="flex justify-between text-sm text-green-700">
+                <span className="font-medium">Descuento ({carrito.descuento_global_porcentaje}%)</span>
+                <span className="tabular-nums font-semibold">−{formatCurrency(carrito.descuento_global_monto)}</span>
+              </div>
+            )}
+
+            <Separator />
+
             <div className="flex justify-between font-bold text-base">
               <span>Total</span>
               <span className="tabular-nums">{formatCurrency(carrito.total)}</span>
@@ -498,6 +547,12 @@ function PasoConfirmar({
               <span className="tabular-nums">−{formatCurrency(carrito.descuento_total)}</span>
             </div>
           )}
+          {carrito.descuento_global_monto > 0 && (
+            <div className="flex justify-between text-sm text-green-700 font-medium">
+              <span>Descuento ({carrito.descuento_global_porcentaje}%)</span>
+              <span className="tabular-nums">−{formatCurrency(carrito.descuento_global_monto)}</span>
+            </div>
+          )}
           <div className="flex justify-between font-bold text-base">
             <span>Total</span>
             <span className="tabular-nums">{formatCurrency(carrito.total)}</span>
@@ -569,8 +624,14 @@ function PantallaExito({
         <div className="px-4 py-3 border-t border-border bg-muted/20 space-y-1">
           {carrito.promocion_aplicada && (
             <div className="flex justify-between text-sm text-green-700 font-medium">
-              <span>Descuento</span>
+              <span>Descuento promoción</span>
               <span className="tabular-nums">−{formatCurrency(carrito.descuento_total)}</span>
+            </div>
+          )}
+          {carrito.descuento_global_monto > 0 && (
+            <div className="flex justify-between text-sm text-green-700 font-medium">
+              <span>Descuento ({carrito.descuento_global_porcentaje}%)</span>
+              <span className="tabular-nums">−{formatCurrency(carrito.descuento_global_monto)}</span>
             </div>
           )}
           <div className="flex justify-between font-bold text-lg">
@@ -884,6 +945,7 @@ export default function NuevaVentaClient({
   const [paso, setPaso]           = useState(1);
   const [lineas, setLineas]       = useState<LineaCarrito[]>([]);
   const [productosConDescuento, setProductosConDescuento] = useState<Set<number>>(new Set());
+  const [descuentoGlobalPct, setDescuentoGlobalPct] = useState<DescuentoGlobal>(null);
   const [cliente, setCliente]     = useState<Cliente | null>(null);
   const [metodo, setMetodo]       = useState<MetodoPago>('efectivo');
   const [montoRecibido, setMontoRecibido] = useState<string>('');
@@ -899,7 +961,7 @@ export default function NuevaVentaClient({
   const [clienteQuery, setClienteQuery]         = useState('');
   const [modalNuevoCliente, setModalNuevoCliente] = useState(false);
 
-  const carrito = calcularCarrito(lineas, productosConDescuento);
+  const carrito = calcularCarrito(lineas, productosConDescuento, descuentoGlobalPct);
   const candidatosDescuento = calcularCandidatosDescuento(lineas);
 
   // ── Carrito ────────────────────────────────────────────────────────────────
@@ -966,6 +1028,7 @@ export default function NuevaVentaClient({
         cliente_id:     cliente?.id ?? null,
         sesion_caja_id: sesionCajaId,
         productosConDescuento: Array.from(productosConDescuento),
+        descuentoGlobalPorcentaje: descuentoGlobalPct,
       });
       if (r?.error) { toast.error(r.error); return; }
       setExitosa({ ventaId: r.ventaId!, folio: r.folio! });
@@ -977,6 +1040,7 @@ export default function NuevaVentaClient({
     setPaso(1);
     setLineas([]);
     setProductosConDescuento(new Set());
+    setDescuentoGlobalPct(null);
     setCliente(null);
     setMetodo('efectivo');
     setMontoRecibido('');
@@ -1036,10 +1100,12 @@ export default function NuevaVentaClient({
             carrito={carrito}
             candidatosDescuento={candidatosDescuento}
             productosConDescuento={productosConDescuento}
+            descuentoGlobalPct={descuentoGlobalPct}
             onAbrirBuscador={() => setModalProductos(true)}
             onCantidad={cambiarCantidad}
             onEliminar={eliminarLinea}
             onToggleDescuento={toggleDescuentoProducto}
+            onSetDescuentoGlobal={setDescuentoGlobalPct}
           />
         )}
         {paso === 2 && (

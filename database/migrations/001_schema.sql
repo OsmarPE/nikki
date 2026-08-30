@@ -157,6 +157,8 @@ CREATE TABLE IF NOT EXISTS ventas (
   usuario_id     INT            NOT NULL,
   sesion_caja_id INT            NOT NULL,
   total          DECIMAL(10,2)  NOT NULL,
+  descuento_porcentaje TINYINT UNSIGNED DEFAULT NULL,
+  descuento_monto      DECIMAL(10,2)  NOT NULL DEFAULT 0.00,
   metodo_pago    ENUM('efectivo','transferencia','tarjeta') NOT NULL,
   creado_at      TIMESTAMP      NOT NULL DEFAULT CURRENT_TIMESTAMP,
   PRIMARY KEY (id),
