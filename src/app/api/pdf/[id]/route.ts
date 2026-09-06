@@ -39,7 +39,9 @@ export async function GET(
   const venta = await getVentaDetalle(ventaId);
   if (!venta) return new NextResponse('Venta no encontrada', { status: 404 });
 
-  if (session.rol !== 'admin' && String(venta.usuario_id) !== session.sub) {
+  // Igual que en el detalle de venta: una venta a crédito es visible para
+  // cualquier vendedor, porque cualquiera con caja abierta puede cobrarla.
+  if (session.rol !== 'admin' && venta.tipo_venta !== 'credito' && String(venta.usuario_id) !== session.sub) {
     return new NextResponse('Sin permiso', { status: 403 });
   }
 
@@ -115,10 +117,14 @@ export async function GET(
   const rowH   = 16;
 
   // Columna izquierda — vendedor / sistema
+  const metodoLabel = venta.tipo_venta === 'credito'
+    ? 'Crédito'
+    : (venta.metodo_pago ? (METODO[venta.metodo_pago] ?? venta.metodo_pago) : '—');
+
   const leftRows: [string, string][] = [
     ['Vendedor:', venta.usuario_nombre ?? '—'],
     ['Folio:', venta.folio],
-    ['Método:', METODO[venta.metodo_pago] ?? venta.metodo_pago],
+    ['Método:', metodoLabel],
   ];
   leftRows.forEach(([label, value]) => {
     t(label, MARGIN, y, { size: 9, color: C.gray, font: fontSemi });
@@ -219,6 +225,34 @@ export async function GET(
   t(fmt(Number(venta.total)), totalX, y, { size: 20, font: fontBold, align: 'right' });
   y -= 36;
 
+  // ── Historial de abonos (solo ventas a crédito) ──────────────────────────────
+  if (venta.tipo_venta === 'credito') {
+    const abonos = venta.abonos ?? [];
+    const saldoPendiente = Number(venta.saldo_pendiente ?? venta.total);
+
+    rule(y, MARGIN, RIGHT, 0.3, C.grayLight);
+    y -= 20;
+    t('Historial de abonos', MARGIN, y, { size: 11, font: fontBold });
+    y -= 20;
+
+    if (abonos.length === 0) {
+      t('Sin abonos registrados.', MARGIN, y, { size: 9, color: C.gray });
+      y -= 18;
+    } else {
+      abonos.forEach(a => {
+        t(fmtDate(a.creado_at), MARGIN, y, { size: 9, color: C.gray });
+        t(METODO[a.metodo_pago] ?? a.metodo_pago, MARGIN + 90, y, { size: 9, color: C.gray });
+        t(fmt(Number(a.monto)), RIGHT, y, { size: 9, align: 'right' });
+        y -= 16;
+      });
+    }
+
+    y -= 6;
+    t('Saldo pendiente:', labelX, y, { size: 10, font: fontSemi, align: 'right' });
+    t(fmt(saldoPendiente), totalX, y, { size: 12, font: fontBold, align: 'right', color: saldoPendiente > 0 ? rgb(0.7, 0.35, 0) : rgb(0.1, 0.5, 0.1) });
+    y -= 30;
+  }
+
   // ── Línea y pie ───────────────────────────────────────────────────────────────
   rule(y);
   y -= 26;
@@ -226,8 +260,10 @@ export async function GET(
   // Nota de agradecimiento
   t('¡Gracias por tu compra!', MARGIN, y, { size: 9, color: C.gray });
 
-  // Método de pago como badge gris
-  const badgeLabel = `Pagado con ${METODO[venta.metodo_pago] ?? venta.metodo_pago}`;
+  // Badge final: método (contado) o estado de la venta a crédito
+  const badgeLabel = venta.tipo_venta === 'credito'
+    ? (Number(venta.saldo_pendiente ?? 0) > 0 ? 'Venta a crédito — saldo pendiente' : 'Venta a crédito — liquidada')
+    : `Pagado con ${metodoLabel}`;
   const badgeW     = fontReg.widthOfTextAtSize(badgeLabel, 8) + 16;
   page.drawRectangle({
     x: RIGHT - badgeW, y: y - 4,

@@ -33,14 +33,21 @@ export async function getSesionAbiertaDetalle(): Promise<SesionCajaDetalle | nul
   const session = await getSession();
   if (!session) return null;
 
+  // total_ventas = dinero cobrado en la sesión (contado + abonos), no el
+  // valor de lo vendido — una venta a crédito solo aporta lo que se ha
+  // abonado, igual que en el dashboard (ver getDashboardStats/ByRange).
   const [rows] = await pool.query<RowDataPacket[]>(`
     SELECT
       sc.*,
       u.nombre                                                            AS usuario_nombre,
-      COALESCE(SUM(v.total), 0)                                          AS total_ventas,
-      COALESCE(SUM(CASE WHEN v.metodo_pago = 'efectivo'      THEN v.total ELSE 0 END), 0) AS monto_efectivo,
-      COALESCE(SUM(CASE WHEN v.metodo_pago = 'transferencia' THEN v.total ELSE 0 END), 0) AS monto_transferencia,
-      COALESCE(SUM(CASE WHEN v.metodo_pago = 'tarjeta'       THEN v.total ELSE 0 END), 0) AS monto_tarjeta,
+      COALESCE(SUM(CASE WHEN v.tipo_venta = 'contado' THEN v.total ELSE 0 END), 0)
+        + COALESCE((SELECT SUM(a.monto) FROM abonos a WHERE a.sesion_caja_id = sc.id), 0)                                     AS total_ventas,
+      COALESCE(SUM(CASE WHEN v.metodo_pago = 'efectivo'      THEN v.total ELSE 0 END), 0)
+        + COALESCE((SELECT SUM(a.monto) FROM abonos a WHERE a.sesion_caja_id = sc.id AND a.metodo_pago = 'efectivo'), 0)      AS monto_efectivo,
+      COALESCE(SUM(CASE WHEN v.metodo_pago = 'transferencia' THEN v.total ELSE 0 END), 0)
+        + COALESCE((SELECT SUM(a.monto) FROM abonos a WHERE a.sesion_caja_id = sc.id AND a.metodo_pago = 'transferencia'), 0) AS monto_transferencia,
+      COALESCE(SUM(CASE WHEN v.metodo_pago = 'tarjeta'       THEN v.total ELSE 0 END), 0)
+        + COALESCE((SELECT SUM(a.monto) FROM abonos a WHERE a.sesion_caja_id = sc.id AND a.metodo_pago = 'tarjeta'), 0)       AS monto_tarjeta,
       COUNT(v.id)                                                        AS num_transacciones
     FROM sesiones_caja sc
     JOIN usuarios u ON u.id = sc.usuario_id
@@ -103,7 +110,15 @@ export async function cerrarCaja(sesionId: number, saldoDeclarado: number) {
      FROM ventas WHERE sesion_caja_id = ? AND metodo_pago = 'efectivo'`,
     [sesionId]
   );
-  const totalEfectivo = Number(ventasRows[0]?.total_efectivo ?? 0);
+  // Los abonos en efectivo cobrados durante esta sesión también cuentan como
+  // efectivo esperado — una venta a crédito no aporta su total aquí (su
+  // metodo_pago es NULL), solo lo que realmente se cobró vía abonos.
+  const [abonosRows] = await pool.query<RowDataPacket[]>(
+    `SELECT COALESCE(SUM(monto), 0) AS total_efectivo
+     FROM abonos WHERE sesion_caja_id = ? AND metodo_pago = 'efectivo'`,
+    [sesionId]
+  );
+  const totalEfectivo = Number(ventasRows[0]?.total_efectivo ?? 0) + Number(abonosRows[0]?.total_efectivo ?? 0);
   const esperado   = Number(sesion.saldo_inicial) + totalEfectivo;
   const diferencia = saldoDeclarado - esperado;
 
@@ -134,10 +149,14 @@ export async function getSesionesCaja(filtro?: {
     SELECT
       sc.*,
       u.nombre                                                            AS usuario_nombre,
-      COALESCE(SUM(v.total), 0)                                          AS total_ventas,
-      COALESCE(SUM(CASE WHEN v.metodo_pago = 'efectivo'      THEN v.total ELSE 0 END), 0) AS monto_efectivo,
-      COALESCE(SUM(CASE WHEN v.metodo_pago = 'transferencia' THEN v.total ELSE 0 END), 0) AS monto_transferencia,
-      COALESCE(SUM(CASE WHEN v.metodo_pago = 'tarjeta'       THEN v.total ELSE 0 END), 0) AS monto_tarjeta,
+      COALESCE(SUM(CASE WHEN v.tipo_venta = 'contado' THEN v.total ELSE 0 END), 0)
+        + COALESCE((SELECT SUM(a.monto) FROM abonos a WHERE a.sesion_caja_id = sc.id), 0)                                     AS total_ventas,
+      COALESCE(SUM(CASE WHEN v.metodo_pago = 'efectivo'      THEN v.total ELSE 0 END), 0)
+        + COALESCE((SELECT SUM(a.monto) FROM abonos a WHERE a.sesion_caja_id = sc.id AND a.metodo_pago = 'efectivo'), 0)      AS monto_efectivo,
+      COALESCE(SUM(CASE WHEN v.metodo_pago = 'transferencia' THEN v.total ELSE 0 END), 0)
+        + COALESCE((SELECT SUM(a.monto) FROM abonos a WHERE a.sesion_caja_id = sc.id AND a.metodo_pago = 'transferencia'), 0) AS monto_transferencia,
+      COALESCE(SUM(CASE WHEN v.metodo_pago = 'tarjeta'       THEN v.total ELSE 0 END), 0)
+        + COALESCE((SELECT SUM(a.monto) FROM abonos a WHERE a.sesion_caja_id = sc.id AND a.metodo_pago = 'tarjeta'), 0)       AS monto_tarjeta,
       COUNT(v.id)                                                        AS num_transacciones
     FROM sesiones_caja sc
     JOIN usuarios u ON u.id = sc.usuario_id
@@ -168,15 +187,21 @@ export async function getResumenCajaHoy() {
   const session = await getSession();
   if (!tienePermiso(session, 'caja', 'ver')) return null;
 
+  // ingresos_totales = dinero cobrado hoy (contado + abonos), no valor
+  // vendido — mismo criterio que total_ventas arriba y que el dashboard.
   const [resumen] = await pool.query<RowDataPacket[]>(`
     SELECT
       COUNT(DISTINCT sc.id)                                              AS total_cajas,
       SUM(CASE WHEN sc.estado = 'abierta'  THEN 1 ELSE 0 END)          AS cajas_abiertas,
       SUM(CASE WHEN sc.estado = 'cerrada'  THEN 1 ELSE 0 END)          AS cajas_cerradas,
-      COALESCE(SUM(v.total), 0)                                          AS ingresos_totales,
-      COALESCE(SUM(CASE WHEN v.metodo_pago = 'efectivo'      THEN v.total ELSE 0 END), 0) AS total_efectivo,
-      COALESCE(SUM(CASE WHEN v.metodo_pago = 'transferencia' THEN v.total ELSE 0 END), 0) AS total_transferencia,
-      COALESCE(SUM(CASE WHEN v.metodo_pago = 'tarjeta'       THEN v.total ELSE 0 END), 0) AS total_tarjeta,
+      COALESCE(SUM(CASE WHEN v.tipo_venta = 'contado' THEN v.total ELSE 0 END), 0)
+        + COALESCE((SELECT SUM(a.monto) FROM abonos a JOIN sesiones_caja sc2 ON sc2.id = a.sesion_caja_id WHERE DATE(sc2.fecha_apertura) = CURDATE()), 0) AS ingresos_totales,
+      COALESCE(SUM(CASE WHEN v.metodo_pago = 'efectivo'      THEN v.total ELSE 0 END), 0)
+        + COALESCE((SELECT SUM(a.monto) FROM abonos a JOIN sesiones_caja sc2 ON sc2.id = a.sesion_caja_id WHERE DATE(sc2.fecha_apertura) = CURDATE() AND a.metodo_pago = 'efectivo'), 0)      AS total_efectivo,
+      COALESCE(SUM(CASE WHEN v.metodo_pago = 'transferencia' THEN v.total ELSE 0 END), 0)
+        + COALESCE((SELECT SUM(a.monto) FROM abonos a JOIN sesiones_caja sc2 ON sc2.id = a.sesion_caja_id WHERE DATE(sc2.fecha_apertura) = CURDATE() AND a.metodo_pago = 'transferencia'), 0) AS total_transferencia,
+      COALESCE(SUM(CASE WHEN v.metodo_pago = 'tarjeta'       THEN v.total ELSE 0 END), 0)
+        + COALESCE((SELECT SUM(a.monto) FROM abonos a JOIN sesiones_caja sc2 ON sc2.id = a.sesion_caja_id WHERE DATE(sc2.fecha_apertura) = CURDATE() AND a.metodo_pago = 'tarjeta'), 0)       AS total_tarjeta,
       COUNT(v.id)                                                        AS num_ventas
     FROM sesiones_caja sc
     LEFT JOIN ventas v ON v.sesion_caja_id = sc.id

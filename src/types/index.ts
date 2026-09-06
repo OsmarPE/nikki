@@ -86,14 +86,29 @@ export interface Venta {
   cliente_id: number | null;
   usuario_id: number;
   sesion_caja_id: number;
+  tipo_venta: 'contado' | 'credito';
   total: number;
   descuento_porcentaje: number | null;
   descuento_monto: number;
-  metodo_pago: 'efectivo' | 'transferencia' | 'tarjeta';
+  metodo_pago: 'efectivo' | 'transferencia' | 'tarjeta' | null;
   creado_at: string;
   cliente_nombre?: string;
   usuario_nombre?: string;
   detalles?: DetalleVenta[];
+  // solo presentes cuando la consulta los calcula
+  saldo_pendiente?: number;
+  abonos?: Abono[];
+}
+
+export interface Abono {
+  id: number;
+  venta_id: number;
+  monto: number;
+  metodo_pago: 'efectivo' | 'transferencia' | 'tarjeta';
+  usuario_id: number;
+  sesion_caja_id: number;
+  creado_at: string;
+  usuario_nombre?: string;
 }
 
 export interface DetalleVenta {

@@ -32,8 +32,9 @@ import type { Producto, Cliente } from '@/types';
 // ─── Tipos locales ─────────────────────────────────────────────────────────────
 interface LineaCarrito { producto: Producto; cantidad: number }
 type MetodoPago = 'efectivo' | 'transferencia' | 'tarjeta';
+type TipoVenta = 'contado' | 'credito';
 type DescuentoGlobal = 10 | 20 | 30 | null;
-interface VentaExitosa { ventaId: number; folio: string }
+interface VentaExitosa { ventaId: number; folio: string; tipoVenta: TipoVenta; saldoPendiente: number }
 
 const OPCIONES_DESCUENTO_GLOBAL = [10, 20, 30] as const;
 
@@ -285,12 +286,13 @@ function PasoProductos({
 
 // ─── Paso 2 — Cliente ──────────────────────────────────────────────────────────
 function PasoCliente({
-  cliente, query, clientes,
+  cliente, query, clientes, requerido,
   onQueryChange, onSeleccionar, onQuitar, onNuevo,
 }: {
   cliente: Cliente | null;
   query: string;
   clientes: Cliente[];
+  requerido: boolean;
   onQueryChange: (q: string) => void;
   onSeleccionar: (c: Cliente) => void;
   onQuitar: () => void;
@@ -311,7 +313,11 @@ function PasoCliente({
     <div className="space-y-4">
       <div>
         <h3 className="text-sm font-semibold">Seleccionar cliente</h3>
-        <p className="text-xs text-muted-foreground mt-0.5">Opcional — puedes continuar como público general</p>
+        <p className="text-xs text-muted-foreground mt-0.5">
+          {requerido
+            ? 'Obligatorio — una venta a crédito necesita saber a quién cobrarle'
+            : 'Opcional — puedes continuar como público general'}
+        </p>
       </div>
 
       {/* Cliente seleccionado */}
@@ -372,7 +378,9 @@ function PasoCliente({
               </button>
             </div>
           </div>
-          <p className="text-[11px] text-muted-foreground/60 text-center">Opcional — puedes continuar sin elegir uno y se registrará como público general</p>
+          {!requerido && (
+            <p className="text-[11px] text-muted-foreground/60 text-center">Opcional — puedes continuar sin elegir uno y se registrará como público general</p>
+          )}
         </div>
       )}
     </div>
@@ -381,48 +389,148 @@ function PasoCliente({
 
 // ─── Paso 3 — Pago ─────────────────────────────────────────────────────────────
 function PasoPago({
-  metodo, onChange, total, montoRecibido, onMontoRecibido,
+  tipoVenta, onChangeTipoVenta, metodo, onChange, total, montoRecibido, onMontoRecibido,
+  abonoInicialMonto, onAbonoInicialMonto, abonoInicialMetodo, onAbonoInicialMetodo,
 }: {
+  tipoVenta: TipoVenta;
+  onChangeTipoVenta: (t: TipoVenta) => void;
   metodo: MetodoPago;
   onChange: (m: MetodoPago) => void;
   total: number;
   montoRecibido: string;
   onMontoRecibido: (v: string) => void;
+  abonoInicialMonto: string;
+  onAbonoInicialMonto: (v: string) => void;
+  abonoInicialMetodo: MetodoPago;
+  onAbonoInicialMetodo: (m: MetodoPago) => void;
 }) {
   const cambio = montoRecibido ? Number(montoRecibido) - total : null;
 
   return (
     <div className="space-y-4">
       <div>
-        <h3 className="text-sm font-semibold">Método de pago</h3>
-        <p className="text-xs text-muted-foreground mt-0.5">¿Cómo va a pagar el cliente?</p>
+        <h3 className="text-sm font-semibold">Forma de pago</h3>
+        <p className="text-xs text-muted-foreground mt-0.5">¿La venta se paga de contado o a crédito?</p>
       </div>
 
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-        {METODOS.map(m => (
-          <button
-            key={m.value}
-            onClick={() => onChange(m.value)}
-            className={cn(
-              'flex flex-col items-center gap-3 rounded-xl border-2 px-5 py-7 transition-all duration-150 text-center',
-              metodo === m.value
-                ? 'border-foreground bg-foreground text-background'
-                : 'border-border bg-background text-muted-foreground hover:border-foreground/30 hover:bg-muted/30',
-            )}
-          >
-            {m.icon}
-            <div>
-              <p className="font-semibold text-sm">{m.label}</p>
-              <p className={cn('text-[11px] mt-0.5', metodo === m.value ? 'text-background/70' : 'text-muted-foreground/70')}>
-                {m.desc}
-              </p>
+      <div className="grid grid-cols-2 gap-3">
+        <button
+          onClick={() => onChangeTipoVenta('contado')}
+          className={cn(
+            'rounded-xl border-2 px-4 py-3 text-left transition-all duration-150',
+            tipoVenta === 'contado'
+              ? 'border-foreground bg-foreground text-background'
+              : 'border-border bg-background text-muted-foreground hover:border-foreground/30 hover:bg-muted/30',
+          )}
+        >
+          <p className="font-semibold text-sm">Contado</p>
+          <p className={cn('text-[11px] mt-0.5', tipoVenta === 'contado' ? 'text-background/70' : 'text-muted-foreground/70')}>
+            Se cobra el total ahora
+          </p>
+        </button>
+        <button
+          onClick={() => onChangeTipoVenta('credito')}
+          className={cn(
+            'rounded-xl border-2 px-4 py-3 text-left transition-all duration-150',
+            tipoVenta === 'credito'
+              ? 'border-foreground bg-foreground text-background'
+              : 'border-border bg-background text-muted-foreground hover:border-foreground/30 hover:bg-muted/30',
+          )}
+        >
+          <p className="font-semibold text-sm">Crédito (abonos)</p>
+          <p className={cn('text-[11px] mt-0.5', tipoVenta === 'credito' ? 'text-background/70' : 'text-muted-foreground/70')}>
+            El cliente paga poco a poco
+          </p>
+        </button>
+      </div>
+
+      {tipoVenta === 'contado' ? (
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+          {METODOS.map(m => (
+            <button
+              key={m.value}
+              onClick={() => onChange(m.value)}
+              className={cn(
+                'flex flex-col items-center gap-3 rounded-xl border-2 px-5 py-7 transition-all duration-150 text-center',
+                metodo === m.value
+                  ? 'border-foreground bg-foreground text-background'
+                  : 'border-border bg-background text-muted-foreground hover:border-foreground/30 hover:bg-muted/30',
+              )}
+            >
+              {m.icon}
+              <div>
+                <p className="font-semibold text-sm">{m.label}</p>
+                <p className={cn('text-[11px] mt-0.5', metodo === m.value ? 'text-background/70' : 'text-muted-foreground/70')}>
+                  {m.desc}
+                </p>
+              </div>
+            </button>
+          ))}
+        </div>
+      ) : (
+        <div className="rounded-xl border border-border overflow-hidden">
+          <div className="flex items-center gap-2 px-4 py-3 border-b border-border/60 bg-muted/30">
+            <Calculator size={14} className="text-muted-foreground" />
+            <span className="text-sm font-medium">Abono inicial (opcional)</span>
+          </div>
+          <div className="px-4 py-4 space-y-4">
+            <div className="flex items-center justify-between text-sm">
+              <span className="text-muted-foreground">Total de la venta</span>
+              <span className="font-bold tabular-nums text-base">{formatCurrency(total)}</span>
             </div>
-          </button>
-        ))}
-      </div>
+            <div className="space-y-1.5">
+              <label className="text-xs font-medium text-foreground">Monto que entrega ahora el cliente</label>
+              <div className="relative">
+                <span className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground text-sm">$</span>
+                <input
+                  type="number"
+                  min={0}
+                  max={total}
+                  step="0.50"
+                  placeholder="0.00 — sin abono inicial"
+                  value={abonoInicialMonto}
+                  onChange={e => onAbonoInicialMonto(e.target.value)}
+                  className="w-full h-9 pl-7 pr-3 text-sm rounded-lg border border-border bg-background focus:outline-none focus:ring-2 focus:ring-ring/40 tabular-nums"
+                />
+              </div>
+            </div>
 
-      {/* Input de cambio — solo cuando el método es efectivo */}
-      {metodo === 'efectivo' && (
+            {Number(abonoInicialMonto) > 0 && (
+              <div className="space-y-1.5">
+                <label className="text-xs font-medium text-foreground">Método del abono inicial</label>
+                <div className="grid grid-cols-3 gap-2">
+                  {METODOS.map(m => (
+                    <button
+                      key={m.value}
+                      type="button"
+                      onClick={() => onAbonoInicialMetodo(m.value)}
+                      className={cn(
+                        'flex items-center justify-center gap-1.5 rounded-md px-2 py-2 text-xs font-medium border transition-colors',
+                        abonoInicialMetodo === m.value
+                          ? 'bg-foreground text-background border-foreground'
+                          : 'border-border hover:bg-muted',
+                      )}
+                    >
+                      {m.icon}
+                      {m.label}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            <div className="flex items-center justify-between rounded-lg px-4 py-3 border border-border bg-muted/20 font-medium">
+              <span className="text-sm text-muted-foreground">Saldo pendiente</span>
+              <span className="text-lg font-bold tabular-nums">
+                {formatCurrency(total - Math.min(total, Number(abonoInicialMonto) || 0))}
+              </span>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Input de cambio — solo cuando la venta es de contado y el método es efectivo */}
+      {tipoVenta === 'contado' && metodo === 'efectivo' && (
         <div className="rounded-xl border border-border overflow-hidden">
           <div className="flex items-center gap-2 px-4 py-3 border-b border-border/60 bg-muted/30">
             <Calculator size={14} className="text-muted-foreground" />
@@ -506,13 +614,16 @@ function PasoPago({
 
 // ─── Paso 4 — Confirmar ────────────────────────────────────────────────────────
 function PasoConfirmar({
-  carrito, cliente, metodo,
+  carrito, cliente, tipoVenta, metodo, abonoInicialMonto,
 }: {
   carrito: ReturnType<typeof calcularCarrito>;
   cliente: Cliente | null;
+  tipoVenta: TipoVenta;
   metodo: MetodoPago;
+  abonoInicialMonto: string;
 }) {
   const metodoInfo = METODOS.find(m => m.value === metodo)!;
+  const abonoInicial = Math.min(carrito.total, Number(abonoInicialMonto) || 0);
   return (
     <div className="space-y-5">
       <div>
@@ -570,26 +681,49 @@ function PasoConfirmar({
           </div>
         </div>
         <div className="rounded-xl border border-border px-4 py-3 space-y-1">
-          <p className="text-[10px] font-semibold uppercase tracking-widest text-muted-foreground/70">Método de pago</p>
+          <p className="text-[10px] font-semibold uppercase tracking-widest text-muted-foreground/70">
+            {tipoVenta === 'credito' ? 'Forma de pago' : 'Método de pago'}
+          </p>
           <div className="flex items-center gap-2">
-            <span className="text-muted-foreground">{metodoInfo.icon}</span>
-            <p className="text-sm font-medium">{metodoInfo.label}</p>
+            {tipoVenta === 'credito' ? (
+              <p className="text-sm font-medium">Crédito (abonos)</p>
+            ) : (
+              <>
+                <span className="text-muted-foreground">{metodoInfo.icon}</span>
+                <p className="text-sm font-medium">{metodoInfo.label}</p>
+              </>
+            )}
           </div>
         </div>
       </div>
+
+      {tipoVenta === 'credito' && (
+        <div className="rounded-xl border border-border px-4 py-3 space-y-2">
+          <div className="flex justify-between text-sm">
+            <span className="text-muted-foreground">Abono inicial</span>
+            <span className="font-medium tabular-nums">{formatCurrency(abonoInicial)}</span>
+          </div>
+          <div className="flex justify-between text-sm font-semibold">
+            <span>Saldo pendiente</span>
+            <span className="tabular-nums">{formatCurrency(carrito.total - abonoInicial)}</span>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
 
 // ─── Pantalla de éxito ─────────────────────────────────────────────────────────
 function PantallaExito({
-  folio, ventaId, carrito, cliente, metodo, onNueva,
+  folio, ventaId, carrito, cliente, tipoVenta, metodo, saldoPendiente, onNueva,
 }: {
   folio: string;
   ventaId: number;
   carrito: ReturnType<typeof calcularCarrito>;
   cliente: Cliente | null;
+  tipoVenta: TipoVenta;
   metodo: MetodoPago;
+  saldoPendiente: number;
   onNueva: () => void;
 }) {
   const metodoInfo = METODOS.find(m => m.value === metodo)!;
@@ -635,11 +769,21 @@ function PantallaExito({
             </div>
           )}
           <div className="flex justify-between font-bold text-lg">
-            <span>Total cobrado</span>
+            <span>{tipoVenta === 'credito' ? 'Total de la venta' : 'Total cobrado'}</span>
             <span className="tabular-nums">{formatCurrency(carrito.total)}</span>
           </div>
         </div>
       </div>
+
+      {tipoVenta === 'credito' && (
+        <div className={cn(
+          'flex items-center justify-between rounded-lg px-4 py-3 border font-medium',
+          saldoPendiente > 0 ? 'bg-amber-50 border-amber-200 text-amber-700' : 'bg-green-50 border-green-200 text-green-700',
+        )}>
+          <span className="text-sm">{saldoPendiente > 0 ? 'Saldo pendiente' : 'Liquidada con el abono inicial'}</span>
+          {saldoPendiente > 0 && <span className="text-lg font-bold tabular-nums">{formatCurrency(saldoPendiente)}</span>}
+        </div>
+      )}
 
       {/* Info */}
       <div className="grid grid-cols-2 gap-3 text-sm">
@@ -648,11 +792,17 @@ function PantallaExito({
           <p className="font-medium">{cliente?.nombre ?? 'Público general'}</p>
         </div>
         <div className="rounded-xl border border-border px-4 py-3">
-          <p className="text-[10px] font-semibold uppercase tracking-widest text-muted-foreground/70 mb-1">Método</p>
-          <div className="flex items-center gap-1.5">
-            <span className="text-muted-foreground [&_svg]:size-3">{metodoInfo.icon}</span>
-            <p className="font-medium">{metodoInfo.label}</p>
-          </div>
+          <p className="text-[10px] font-semibold uppercase tracking-widest text-muted-foreground/70 mb-1">
+            {tipoVenta === 'credito' ? 'Forma de pago' : 'Método'}
+          </p>
+          {tipoVenta === 'credito' ? (
+            <p className="font-medium">Crédito (abonos)</p>
+          ) : (
+            <div className="flex items-center gap-1.5">
+              <span className="text-muted-foreground [&_svg]:size-3">{metodoInfo.icon}</span>
+              <p className="font-medium">{metodoInfo.label}</p>
+            </div>
+          )}
         </div>
       </div>
 
@@ -947,8 +1097,11 @@ export default function NuevaVentaClient({
   const [productosConDescuento, setProductosConDescuento] = useState<Set<number>>(new Set());
   const [descuentoGlobalPct, setDescuentoGlobalPct] = useState<DescuentoGlobal>(null);
   const [cliente, setCliente]     = useState<Cliente | null>(null);
+  const [tipoVenta, setTipoVenta] = useState<TipoVenta>('contado');
   const [metodo, setMetodo]       = useState<MetodoPago>('efectivo');
   const [montoRecibido, setMontoRecibido] = useState<string>('');
+  const [abonoInicialMonto, setAbonoInicialMonto]   = useState<string>('');
+  const [abonoInicialMetodo, setAbonoInicialMetodo] = useState<MetodoPago>('efectivo');
   const [exitosa, setExitosa]     = useState<VentaExitosa | null>(null);
   const [pending, startTransition] = useTransition();
 
@@ -1021,17 +1174,23 @@ export default function NuevaVentaClient({
 
   // ── Confirmar venta ────────────────────────────────────────────────────────
   function confirmar() {
+    const abonoInicial = tipoVenta === 'credito' && Number(abonoInicialMonto) > 0
+      ? { monto: Number(abonoInicialMonto), metodo_pago: abonoInicialMetodo }
+      : null;
     startTransition(async () => {
       const r = await procesarVenta({
         lineas,
-        metodo_pago:    metodo,
+        tipo_venta:     tipoVenta,
+        metodo_pago:    tipoVenta === 'contado' ? metodo : undefined,
         cliente_id:     cliente?.id ?? null,
         sesion_caja_id: sesionCajaId,
         productosConDescuento: Array.from(productosConDescuento),
         descuentoGlobalPorcentaje: descuentoGlobalPct,
+        abonoInicial,
       });
       if (r?.error) { toast.error(r.error); return; }
-      setExitosa({ ventaId: r.ventaId!, folio: r.folio! });
+      const saldoPendiente = tipoVenta === 'credito' ? carrito.total - (abonoInicial?.monto ?? 0) : 0;
+      setExitosa({ ventaId: r.ventaId!, folio: r.folio!, tipoVenta, saldoPendiente });
     });
   }
 
@@ -1042,8 +1201,11 @@ export default function NuevaVentaClient({
     setProductosConDescuento(new Set());
     setDescuentoGlobalPct(null);
     setCliente(null);
+    setTipoVenta('contado');
     setMetodo('efectivo');
     setMontoRecibido('');
+    setAbonoInicialMonto('');
+    setAbonoInicialMetodo('efectivo');
     setExitosa(null);
     setClienteQuery('');
   }
@@ -1051,7 +1213,7 @@ export default function NuevaVentaClient({
   // ── Validación por paso ────────────────────────────────────────────────────
   const puedeSiguiente =
     (paso === 1 && lineas.length > 0) ||
-    paso === 2 ||
+    (paso === 2 && (tipoVenta !== 'credito' || cliente !== null)) ||
     paso === 3 ||
     paso === 4;
 
@@ -1064,7 +1226,9 @@ export default function NuevaVentaClient({
           ventaId={exitosa.ventaId}
           carrito={carrito}
           cliente={cliente}
+          tipoVenta={exitosa.tipoVenta}
           metodo={metodo}
+          saldoPendiente={exitosa.saldoPendiente}
           onNueva={nuevaVenta}
         />
       </div>
@@ -1113,14 +1277,37 @@ export default function NuevaVentaClient({
             cliente={cliente}
             query={clienteQuery}
             clientes={clientes}
+            requerido={tipoVenta === 'credito'}
             onQueryChange={setClienteQuery}
             onSeleccionar={c => { setCliente(c); setClienteQuery(''); }}
             onQuitar={() => setCliente(null)}
             onNuevo={() => setModalNuevoCliente(true)}
           />
         )}
-        {paso === 3 && <PasoPago metodo={metodo} onChange={m => { setMetodo(m); setMontoRecibido(''); }} total={carrito.total} montoRecibido={montoRecibido} onMontoRecibido={setMontoRecibido} />}
-        {paso === 4 && <PasoConfirmar carrito={carrito} cliente={cliente} metodo={metodo} />}
+        {paso === 3 && (
+          <PasoPago
+            tipoVenta={tipoVenta}
+            onChangeTipoVenta={setTipoVenta}
+            metodo={metodo}
+            onChange={m => { setMetodo(m); setMontoRecibido(''); }}
+            total={carrito.total}
+            montoRecibido={montoRecibido}
+            onMontoRecibido={setMontoRecibido}
+            abonoInicialMonto={abonoInicialMonto}
+            onAbonoInicialMonto={setAbonoInicialMonto}
+            abonoInicialMetodo={abonoInicialMetodo}
+            onAbonoInicialMetodo={setAbonoInicialMetodo}
+          />
+        )}
+        {paso === 4 && (
+          <PasoConfirmar
+            carrito={carrito}
+            cliente={cliente}
+            tipoVenta={tipoVenta}
+            metodo={metodo}
+            abonoInicialMonto={abonoInicialMonto}
+          />
+        )}
       </div>
 
       {/* Navegación */}

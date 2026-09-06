@@ -73,51 +73,57 @@ export function Combobox({
           {/* Backdrop */}
           <div className="fixed inset-0 z-40" onClick={() => { setOpen(false); setSearch(''); }} />
 
-          {/* Dropdown */}
-          <div className="absolute left-0 top-full mt-1 z-50 w-52 rounded-lg border border-border bg-popover shadow-md overflow-hidden">
-            {/* Search */}
-            <div className="flex items-center border-b border-border px-2.5 py-1.5 gap-2">
-              <SearchIcon className="size-3.5 text-muted-foreground shrink-0" />
-              <input
-                autoFocus
-                value={search}
-                onChange={e => setSearch(e.target.value)}
-                placeholder={searchPlaceholder}
-                className="flex-1 bg-transparent text-sm outline-none placeholder:text-muted-foreground"
-              />
-            </div>
+          {/* Dropdown — shadow/ring en el envoltorio exterior: si viven en el
+              mismo elemento que `overflow-hidden` (necesario para recortar
+              las opciones a las esquinas redondeadas), el navegador recorta
+              también la sombra y el borde deja de notarse sobre contenido
+              debajo (p. ej. una tabla). */}
+          <div className="absolute left-0 top-full mt-1 z-50 w-52 rounded-lg">
+            <div className="rounded-lg border border-border bg-popover overflow-hidden">
+              {/* Search */}
+              <div className="flex items-center border-b border-border px-2.5 py-1.5 gap-2">
+                <SearchIcon className="size-3.5 text-muted-foreground shrink-0" />
+                <input
+                  autoFocus
+                  value={search}
+                  onChange={e => setSearch(e.target.value)}
+                  placeholder={searchPlaceholder}
+                  className="flex-1 bg-transparent text-sm outline-none placeholder:text-muted-foreground"
+                />
+              </div>
 
-            {/* Options */}
-            <div className="max-h-52 overflow-y-auto py-1">
-              {filtered.length === 0 ? (
-                <p className="py-4 text-center text-xs text-muted-foreground">{emptyText}</p>
-              ) : (
-                filtered.map(option => (
-                  <button
-                    key={option.value}
-                    type="button"
-                    onClick={() => select(option.value)}
-                    className={cn(
-                      'w-full flex items-center justify-between px-2.5 py-1.5 text-sm text-left',
-                      'hover:bg-accent hover:text-accent-foreground transition-colors',
-                      value === option.value && 'bg-accent/50',
-                    )}
-                  >
-                    <span className="flex items-center gap-2 truncate">
-                      {option.icon && <span className="shrink-0">{option.icon}</span>}
-                      {option.label}
-                    </span>
-                    <span className="flex items-center gap-1.5 shrink-0">
-                      {option.count !== undefined && (
-                        <span className="text-[11px] tabular-nums text-muted-foreground">{option.count}</span>
+              {/* Options */}
+              <div className="max-h-52 overflow-y-auto py-1">
+                {filtered.length === 0 ? (
+                  <p className="py-4 text-center text-xs text-muted-foreground">{emptyText}</p>
+                ) : (
+                  filtered.map(option => (
+                    <button
+                      key={option.value}
+                      type="button"
+                      onClick={() => select(option.value)}
+                      className={cn(
+                        'w-full flex items-center justify-between px-2.5 py-1.5 text-sm text-left',
+                        'hover:bg-accent hover:text-accent-foreground transition-colors',
+                        value === option.value && 'bg-accent/50',
                       )}
-                      <CheckIcon
-                        className={cn('size-3.5', value === option.value ? 'opacity-100' : 'opacity-0')}
-                      />
-                    </span>
-                  </button>
-                ))
-              )}
+                    >
+                      <span className="flex items-center gap-2 truncate">
+                        {option.icon && <span className="shrink-0">{option.icon}</span>}
+                        {option.label}
+                      </span>
+                      <span className="flex items-center gap-1.5 shrink-0">
+                        {option.count !== undefined && (
+                          <span className="text-[11px] tabular-nums text-muted-foreground">{option.count}</span>
+                        )}
+                        <CheckIcon
+                          className={cn('size-3.5', value === option.value ? 'opacity-100' : 'opacity-0')}
+                        />
+                      </span>
+                    </button>
+                  ))
+                )}
+              </div>
             </div>
           </div>
         </>
@@ -198,74 +204,78 @@ export function FacetedFilter({
         <>
           <div className="fixed inset-0 z-40" onClick={() => { setOpen(false); setSearch(''); }} />
 
-          <div className="absolute left-0 top-full mt-1 z-50 w-52 rounded-lg border border-border bg-popover shadow-md overflow-hidden">
-            {/* Search */}
-            <div className="flex items-center border-b border-border px-2.5 py-1.5 gap-2">
-              <SearchIcon className="size-3.5 text-muted-foreground shrink-0" />
-              <input
-                autoFocus
-                value={search}
-                onChange={e => setSearch(e.target.value)}
-                placeholder={`Filtrar ${title.toLowerCase()}…`}
-                className="flex-1 bg-transparent text-sm outline-none placeholder:text-muted-foreground"
-              />
-            </div>
+          {/* Ver nota en Combobox: shadow/ring van en el envoltorio exterior
+              para que no queden recortados por el `overflow-hidden` interno. */}
+          <div className="absolute left-0 top-full mt-1 z-50 w-52 rounded-lg">
+            <div className="rounded-lg border border-border bg-popover overflow-hidden">
+              {/* Search */}
+              <div className="flex items-center border-b border-border px-2.5 py-1.5 gap-2">
+                <SearchIcon className="size-3.5 text-muted-foreground shrink-0" />
+                <input
+                  autoFocus
+                  value={search}
+                  onChange={e => setSearch(e.target.value)}
+                  placeholder={`Filtrar ${title.toLowerCase()}…`}
+                  className="flex-1 bg-transparent text-sm outline-none placeholder:text-muted-foreground"
+                />
+              </div>
 
-            {/* Options */}
-            <div className="max-h-52 overflow-y-auto py-1">
-              {filtered.length === 0 ? (
-                <p className="py-4 text-center text-xs text-muted-foreground">Sin resultados.</p>
-              ) : (
-                filtered.map(option => {
-                  const isSelected = selected.has(option.value);
-                  return (
-                    <button
-                      key={option.value}
-                      type="button"
-                      onClick={() => toggle(option.value)}
-                      className={cn(
-                        'w-full flex items-center gap-2.5 px-2.5 py-1.5 text-sm text-left',
-                        'hover:bg-accent hover:text-accent-foreground transition-colors',
-                      )}
-                    >
-                      {/* Checkbox */}
-                      <div className={cn(
-                        'h-3.5 w-3.5 rounded-[3px] border shrink-0 flex items-center justify-center transition-colors',
-                        isSelected
-                          ? 'bg-primary border-primary'
-                          : 'border-border bg-background',
-                      )}>
-                        {isSelected && <CheckIcon className="size-2.5 text-primary-foreground" strokeWidth={3} />}
-                      </div>
+              {/* Options */}
+              <div className="max-h-52 overflow-y-auto py-1">
+                {filtered.length === 0 ? (
+                  <p className="py-4 text-center text-xs text-muted-foreground">Sin resultados.</p>
+                ) : (
+                  filtered.map(option => {
+                    const isSelected = selected.has(option.value);
+                    return (
+                      <button
+                        key={option.value}
+                        type="button"
+                        onClick={() => toggle(option.value)}
+                        className={cn(
+                          'w-full flex items-center gap-2.5 px-2.5 py-1.5 text-sm text-left',
+                          'hover:bg-accent hover:text-accent-foreground transition-colors',
+                        )}
+                      >
+                        {/* Checkbox */}
+                        <div className={cn(
+                          'h-3.5 w-3.5 rounded-[3px] border shrink-0 flex items-center justify-center transition-colors',
+                          isSelected
+                            ? 'bg-primary border-primary'
+                            : 'border-border bg-background',
+                        )}>
+                          {isSelected && <CheckIcon className="size-2.5 text-primary-foreground" strokeWidth={3} />}
+                        </div>
 
-                      <span className="flex items-center gap-1.5 flex-1 truncate">
-                        {option.icon && <span className="shrink-0">{option.icon}</span>}
-                        {option.label}
-                      </span>
-
-                      {option.count !== undefined && (
-                        <span className="text-[11px] tabular-nums text-muted-foreground ml-auto">
-                          {option.count}
+                        <span className="flex items-center gap-1.5 flex-1 truncate">
+                          {option.icon && <span className="shrink-0">{option.icon}</span>}
+                          {option.label}
                         </span>
-                      )}
-                    </button>
-                  );
-                })
+
+                        {option.count !== undefined && (
+                          <span className="text-[11px] tabular-nums text-muted-foreground ml-auto">
+                            {option.count}
+                          </span>
+                        )}
+                      </button>
+                    );
+                  })
+                )}
+              </div>
+
+              {/* Clear */}
+              {hasSelection && (
+                <div className="border-t border-border p-1">
+                  <button
+                    type="button"
+                    onClick={clearAll}
+                    className="w-full text-center text-xs text-muted-foreground hover:text-foreground py-1 hover:bg-accent rounded-md transition-colors"
+                  >
+                    Limpiar filtros
+                  </button>
+                </div>
               )}
             </div>
-
-            {/* Clear */}
-            {hasSelection && (
-              <div className="border-t border-border p-1">
-                <button
-                  type="button"
-                  onClick={clearAll}
-                  className="w-full text-center text-xs text-muted-foreground hover:text-foreground py-1 hover:bg-accent rounded-md transition-colors"
-                >
-                  Limpiar filtros
-                </button>
-              </div>
-            )}
           </div>
         </>
       )}

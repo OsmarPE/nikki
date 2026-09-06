@@ -271,7 +271,9 @@ export default function DashboardClient({
               <p className="text-sm font-semibold tabular-nums">{data.total_ventas}</p>
             </div>
             <div className="text-center">
-              <p className="text-[11px] text-muted-foreground">Ingresos</p>
+              <p className="text-[11px] text-muted-foreground" title="Dinero realmente cobrado: ventas de contado + abonos recibidos en el período">
+                Ingresos
+              </p>
               <p className="text-sm font-semibold tabular-nums">{formatCurrency(data.total_ingresos)}</p>
             </div>
             <div className="text-center">

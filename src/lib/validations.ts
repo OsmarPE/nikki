@@ -90,6 +90,13 @@ export const passwordSchema = z.object({
 });
 export type PasswordFormValues = z.infer<typeof passwordSchema>;
 
+// ─── Abono a venta a crédito ───────────────────────────────────────────────────
+export const abonoSchema = z.object({
+  monto:       z.coerce.number().positive('El monto debe ser mayor a 0'),
+  metodo_pago: z.enum(['efectivo', 'transferencia', 'tarjeta']),
+});
+export type AbonoFormValues = z.infer<typeof abonoSchema>;
+
 // ─── Catálogo simple (categorías, marcas) ─────────────────────────────────────
 export const catalogoNombreSchema = z.object({
   nombre: z.string().min(1, 'El nombre es requerido').max(100),

@@ -19,8 +19,10 @@ export default async function VentaDetallePage({ params }: Props) {
 
   if (!venta) notFound();
 
-  // Vendedor solo ve sus propias ventas
-  if (session?.rol !== 'admin' && String(venta.usuario_id) !== session?.sub) {
+  // Vendedor solo ve sus propias ventas de contado — las ventas a crédito son
+  // visibles para cualquier vendedor, porque cualquiera con caja abierta puede
+  // registrar un abono, no solo quien hizo la venta original.
+  if (session?.rol !== 'admin' && venta.tipo_venta !== 'credito' && String(venta.usuario_id) !== session?.sub) {
     notFound();
   }
 

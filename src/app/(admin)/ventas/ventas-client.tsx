@@ -13,7 +13,7 @@ import { Calendar } from '@/components/ui/calendar';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Text } from '@/components/ui/text';
 import { cn, formatCurrency, formatDate, toLocalDateKey } from '@/lib/utils';
-import { Banknote, CreditCard, ArrowRightLeft, X, PlusCircle, CalendarIcon } from 'lucide-react';
+import { Banknote, CreditCard, ArrowRightLeft, Wallet, X, PlusCircle, CalendarIcon } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import type { Venta } from '@/types';
 
@@ -27,6 +27,28 @@ const METODO_ICONS: Record<string, React.ReactNode> = {
   efectivo:      <Banknote size={13} />,
   transferencia: <ArrowRightLeft size={13} />,
   tarjeta:       <CreditCard size={13} />,
+};
+
+type EstadoPago = 'pagada' | 'parcial' | 'pendiente';
+
+function estadoPago(v: Venta): EstadoPago {
+  if (v.tipo_venta !== 'credito') return 'pagada';
+  const saldo = Number(v.saldo_pendiente ?? 0);
+  if (saldo <= 0) return 'pagada';
+  if (saldo >= Number(v.total)) return 'pendiente';
+  return 'parcial';
+}
+
+const ESTADO_LABELS: Record<EstadoPago, string> = {
+  pagada: 'Pagada',
+  parcial: 'Parcial',
+  pendiente: 'Pendiente',
+};
+
+const ESTADO_CLASSES: Record<EstadoPago, string> = {
+  pagada:    'bg-green-50 text-green-700 border-green-200',
+  parcial:   'bg-amber-50 text-amber-700 border-amber-200',
+  pendiente: 'bg-red-50 text-red-700 border-red-200',
 };
 
 function buildColumns(router: ReturnType<typeof useRouter>): ColumnDef<Venta>[] {
@@ -59,12 +81,30 @@ function buildColumns(router: ReturnType<typeof useRouter>): ColumnDef<Venta>[] 
   {
     accessorKey: 'metodo_pago',
     header: 'Método',
-    cell: ({ row }) => (
-      <Badge variant="secondary" className="gap-1.5 font-normal">
-        {METODO_ICONS[row.original.metodo_pago]}
-        {METODO_LABELS[row.original.metodo_pago]}
-      </Badge>
-    ),
+    cell: ({ row }) =>
+      row.original.tipo_venta === 'credito' ? (
+        <Badge variant="secondary" className="gap-1.5 font-normal">
+          <Wallet size={13} />
+          Crédito
+        </Badge>
+      ) : (
+        <Badge variant="secondary" className="gap-1.5 font-normal">
+          {row.original.metodo_pago && METODO_ICONS[row.original.metodo_pago]}
+          {row.original.metodo_pago ? METODO_LABELS[row.original.metodo_pago] : '—'}
+        </Badge>
+      ),
+  },
+  {
+    id: 'estado_pago',
+    header: 'Estado',
+    cell: ({ row }) => {
+      const estado = estadoPago(row.original);
+      return (
+        <Badge variant="outline" className={cn('font-normal', ESTADO_CLASSES[estado])}>
+          {ESTADO_LABELS[estado]}
+        </Badge>
+      );
+    },
   },
   {
     accessorKey: 'total',
@@ -110,11 +150,17 @@ const METODO_OPTIONS = Object.entries(METODO_LABELS).map(([value, label]) => ({
   icon: METODO_ICONS[value],
 }));
 
+const ESTADO_OPTIONS = (Object.entries(ESTADO_LABELS) as [EstadoPago, string][]).map(([value, label]) => ({
+  value,
+  label,
+}));
+
 export default function VentasClient({ ventas }: { ventas: Venta[] }) {
   const router = useRouter();
   const columns = useMemo(() => buildColumns(router), [router]);
   const [busqueda, setBusqueda] = useState('');
   const [metodos, setMetodos] = useState<Set<string>>(new Set());
+  const [estados, setEstados] = useState<Set<string>>(new Set());
   const [fecha, setFecha] = useState('');
   const [calendarOpen, setCalendarOpen] = useState(false);
   const fechaSeleccionada = fecha ? new Date(`${fecha}T00:00:00`) : undefined;
@@ -127,6 +173,13 @@ export default function VentasClient({ ventas }: { ventas: Venta[] }) {
     })),
   [ventas]);
 
+  const estadosConConteo = useMemo(() =>
+    ESTADO_OPTIONS.map(o => ({
+      ...o,
+      count: ventas.filter(v => estadoPago(v) === o.value).length,
+    })),
+  [ventas]);
+
   const filtradas = useMemo(() =>
     ventas.filter(v => {
       const matchBusqueda =
@@ -134,19 +187,22 @@ export default function VentasClient({ ventas }: { ventas: Venta[] }) {
         (v.cliente_nombre ?? '').toLowerCase().includes(busqueda.toLowerCase()) ||
         (v.usuario_nombre ?? '').toLowerCase().includes(busqueda.toLowerCase());
 
-      const matchMetodo = metodos.size === 0 || metodos.has(v.metodo_pago);
+      const matchMetodo = metodos.size === 0 || (v.metodo_pago != null && metodos.has(v.metodo_pago));
+
+      const matchEstado = estados.size === 0 || estados.has(estadoPago(v));
 
       const matchFecha = !fecha || toLocalDateKey(v.creado_at) === fecha;
 
-      return matchBusqueda && matchMetodo && matchFecha;
+      return matchBusqueda && matchMetodo && matchEstado && matchFecha;
     }),
-  [ventas, busqueda, metodos, fecha]);
+  [ventas, busqueda, metodos, estados, fecha]);
 
-  const hayFiltros = busqueda || metodos.size > 0 || fecha;
+  const hayFiltros = busqueda || metodos.size > 0 || estados.size > 0 || fecha;
 
   function limpiarTodo() {
     setBusqueda('');
     setMetodos(new Set());
+    setEstados(new Set());
     setFecha('');
   }
 
@@ -175,6 +231,13 @@ export default function VentasClient({ ventas }: { ventas: Venta[] }) {
           options={metodosConConteo}
           selected={metodos}
           onSelectionChange={setMetodos}
+        />
+
+        <FacetedFilter
+          title="Estado de pago"
+          options={estadosConConteo}
+          selected={estados}
+          onSelectionChange={setEstados}
         />
 
         <Popover open={calendarOpen} onOpenChange={setCalendarOpen}>

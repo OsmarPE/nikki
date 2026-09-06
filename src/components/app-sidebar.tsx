@@ -15,6 +15,7 @@ import {
   PlusCircle,
   Vault,
   Settings,
+  Wallet,
 } from 'lucide-react';
 
 import {
@@ -42,6 +43,7 @@ const NAV: { href: string; label: string; icon: React.ElementType; modulo: Modul
   { href: '/productos',   label: 'Productos',     icon: Package,        modulo: 'productos' },
   { href: '/inventario',  label: 'Inventario',    icon: Warehouse,      modulo: 'inventario' },
   { href: '/ventas',      label: 'Ventas',        icon: ShoppingCart,   modulo: 'ventas' },
+  { href: '/cuentas-por-cobrar', label: 'Abonos', icon: Wallet, modulo: 'ventas' },
   { href: '/clientes',    label: 'Clientes',      icon: Users,          modulo: 'clientes' },
   { href: '/categorias',  label: 'Categorías',    icon: Tag,            modulo: 'categorias' },
   { href: '/marcas',      label: 'Marcas',        icon: Award,          modulo: 'marcas' },

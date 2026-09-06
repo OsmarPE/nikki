@@ -156,10 +156,11 @@ CREATE TABLE IF NOT EXISTS ventas (
   cliente_id     INT            DEFAULT NULL,
   usuario_id     INT            NOT NULL,
   sesion_caja_id INT            NOT NULL,
+  tipo_venta     ENUM('contado','credito') NOT NULL DEFAULT 'contado',
   total          DECIMAL(10,2)  NOT NULL,
   descuento_porcentaje TINYINT UNSIGNED DEFAULT NULL,
   descuento_monto      DECIMAL(10,2)  NOT NULL DEFAULT 0.00,
-  metodo_pago    ENUM('efectivo','transferencia','tarjeta') NOT NULL,
+  metodo_pago    ENUM('efectivo','transferencia','tarjeta') DEFAULT NULL,
   creado_at      TIMESTAMP      NOT NULL DEFAULT CURRENT_TIMESTAMP,
   PRIMARY KEY (id),
   UNIQUE KEY uq_ventas_folio (folio),
@@ -188,6 +189,25 @@ CREATE TABLE IF NOT EXISTS detalles_ventas (
   KEY idx_det_producto (producto_id),
   CONSTRAINT fk_det_venta    FOREIGN KEY (venta_id)    REFERENCES ventas   (id),
   CONSTRAINT fk_det_producto FOREIGN KEY (producto_id) REFERENCES productos(id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+-- ------------------------------------------------------------
+-- abonos (pagos parciales de ventas a crédito)
+-- ------------------------------------------------------------
+CREATE TABLE IF NOT EXISTS abonos (
+  id             INT            NOT NULL AUTO_INCREMENT,
+  venta_id       INT            NOT NULL,
+  monto          DECIMAL(10,2)  NOT NULL,
+  metodo_pago    ENUM('efectivo','transferencia','tarjeta') NOT NULL,
+  usuario_id     INT            NOT NULL,
+  sesion_caja_id INT            NOT NULL,
+  creado_at      TIMESTAMP      NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  PRIMARY KEY (id),
+  KEY idx_abonos_venta   (venta_id),
+  KEY idx_abonos_sesion  (sesion_caja_id),
+  CONSTRAINT fk_abonos_venta    FOREIGN KEY (venta_id)       REFERENCES ventas       (id),
+  CONSTRAINT fk_abonos_usuario  FOREIGN KEY (usuario_id)     REFERENCES usuarios     (id),
+  CONSTRAINT fk_abonos_sesion   FOREIGN KEY (sesion_caja_id) REFERENCES sesiones_caja(id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
 SET FOREIGN_KEY_CHECKS = 1;
