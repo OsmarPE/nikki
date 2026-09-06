@@ -143,12 +143,12 @@ export default function CuentasPorCobrarClient({ cuentas }: { cuentas: CuentaPor
           className="h-8 w-64 text-sm"
         />
 
-        <FacetedFilter
+        {/* <FacetedFilter
           title="Cliente"
           options={clientesConConteo}
           selected={clientes}
           onSelectionChange={setClientes}
-        />
+        /> */}
 
         {hayFiltros && (
           <Button variant="outline" size="sm" onClick={limpiarTodo} className="h-8 px-2 text-muted-foreground hover:text-foreground gap-1.5">
