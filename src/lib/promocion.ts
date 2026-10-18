@@ -57,7 +57,7 @@ export function calcularCandidatosDescuento(lineas: LineaCarrito[]): CandidatoDe
 export function calcularCarrito(
   lineas: LineaCarrito[],
   productosConDescuento: Set<number> | number[] = new Set(),
-  descuentoGlobalPorcentaje: 10 | 20 | 30 | null = null,
+  descuentoGlobalPorcentaje: number | null = null,
 ): ResultadoCarrito {
   const seleccionados = productosConDescuento instanceof Set
     ? productosConDescuento
@@ -93,7 +93,7 @@ export function calcularCarrito(
 
   const subtotal = parseFloat(items.reduce((s, i) => s + i.subtotal, 0).toFixed(2));
 
-  // Descuento global (10/20/30%) que el vendedor aplica sobre el total ya
+  // Descuento global (porcentaje entero 1–100) que el vendedor aplica sobre el total ya
   // resuelto por la promoción 4x3 — se acumula con esta, no la sustituye.
   const descuentoGlobalMonto = descuentoGlobalPorcentaje
     ? parseFloat((subtotal * descuentoGlobalPorcentaje / 100).toFixed(2))

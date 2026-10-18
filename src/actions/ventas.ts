@@ -27,7 +27,7 @@ export async function procesarVenta(input: {
   cliente_id?: number | null;
   sesion_caja_id: number;
   productosConDescuento?: number[];
-  descuentoGlobalPorcentaje?: 10 | 20 | 30 | null;
+  descuentoGlobalPorcentaje?: number | null;
   abonoInicial?: { monto: number; metodo_pago: 'efectivo' | 'transferencia' | 'tarjeta' } | null;
 }) {
   const session = await getSession();
@@ -39,6 +39,10 @@ export async function procesarVenta(input: {
   }
   if (tipoVenta === 'contado' && !input.metodo_pago) {
     return { error: 'Selecciona un método de pago.' };
+  }
+  const pctGlobal = input.descuentoGlobalPorcentaje;
+  if (pctGlobal != null && (!Number.isInteger(pctGlobal) || pctGlobal < 1 || pctGlobal > 100)) {
+    return { error: 'El descuento adicional debe ser un número entero entre 1 y 100.' };
   }
 
   const { items, total, descuento_global_porcentaje, descuento_global_monto } = calcularCarrito(

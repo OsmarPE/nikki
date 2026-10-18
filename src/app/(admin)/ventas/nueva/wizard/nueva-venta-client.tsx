@@ -33,7 +33,7 @@ import type { Producto, Cliente } from '@/types';
 interface LineaCarrito { producto: Producto; cantidad: number }
 type MetodoPago = 'efectivo' | 'transferencia' | 'tarjeta';
 type TipoVenta = 'contado' | 'credito';
-type DescuentoGlobal = 10 | 20 | 30 | null;
+type DescuentoGlobal = number | null;
 interface VentaExitosa { ventaId: number; folio: string; tipoVenta: TipoVenta; saldoPendiente: number }
 
 const OPCIONES_DESCUENTO_GLOBAL = [10, 20, 30] as const;
@@ -95,32 +95,84 @@ function Stepper({ paso }: { paso: number }) {
   );
 }
 
-// ─── Selector de descuento global (10/20/30%) ──────────────────────────────────
+// ─── Selector de descuento global (atajos 10/20/30% o porcentaje libre) ────────
 function SelectorDescuentoGlobal({
   valor, onChange,
 }: {
   valor: DescuentoGlobal;
   onChange: (v: DescuentoGlobal) => void;
 }) {
+  // Texto del campo libre. Vacío = el valor (si hay) viene de un botón.
+  const [texto, setTexto] = useState('');
+
+  function handleInput(entrada: string) {
+    const soloDigitos = entrada.replace(/\D/g, '');
+    if (soloDigitos === '') {
+      setTexto('');
+      return onChange(null);
+    }
+    const pct = Math.min(100, parseInt(soloDigitos, 10));
+    setTexto(pct > 0 ? String(pct) : '');
+    onChange(pct > 0 ? pct : null);
+  }
+
+  function handleBoton(pct: number) {
+    setTexto('');
+    onChange(valor === pct && texto === '' ? null : pct);
+  }
+
+  // `valor != null` cubre el caso en que el padre resetea el descuento (tras cobrar).
+  const esPersonalizado = texto !== '' && valor != null;
+  // "Otro" se reemplaza por el input mientras se escribe; al salir vuelve a ser botón.
+  const [editando, setEditando] = useState(false);
+
+  const claseBoton = (activo: boolean) => cn(
+    'px-2.5 py-1 rounded-md text-xs font-semibold border transition-colors',
+    activo
+      ? 'bg-foreground text-background border-foreground'
+      : 'border-border hover:bg-muted',
+  );
+
   return (
-    <div className="flex items-center justify-between">
+    <div className="flex items-center justify-between gap-2">
       <span className="text-xs font-medium text-muted-foreground">Descuento adicional</span>
       <div className="flex items-center gap-1.5">
         {OPCIONES_DESCUENTO_GLOBAL.map(pct => (
           <button
             key={pct}
             type="button"
-            onClick={() => onChange(valor === pct ? null : pct)}
-            className={cn(
-              'px-2.5 py-1 rounded-md text-xs font-semibold border transition-colors',
-              valor === pct
-                ? 'bg-foreground text-background border-foreground'
-                : 'border-border hover:bg-muted',
-            )}
+            onClick={() => handleBoton(pct)}
+            className={claseBoton(valor === pct && !esPersonalizado)}
           >
             {pct}%
           </button>
         ))}
+        {editando ? (
+          <label className="flex items-center rounded-md border border-foreground px-2.5 py-1 text-xs font-semibold cursor-text">
+            <input
+              type="text"
+              inputMode="numeric"
+              autoFocus
+              aria-label="Porcentaje de descuento personalizado"
+              value={esPersonalizado ? texto : ''}
+              onChange={e => handleInput(e.target.value)}
+              onBlur={() => setEditando(false)}
+              onKeyDown={e => {
+                if (e.key === 'Enter' || e.key === 'Escape') e.currentTarget.blur();
+              }}
+              className="w-6 bg-transparent text-right tabular-nums outline-none"
+            />
+            %
+          </label>
+        ) : (
+          <button
+            type="button"
+            onClick={() => setEditando(true)}
+            className={claseBoton(esPersonalizado)}
+          >
+            {esPersonalizado ? `${texto}%` : 'Otro'}
+          </button>
+        )}
       </div>
     </div>
   );
