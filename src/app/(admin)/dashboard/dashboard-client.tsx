@@ -5,12 +5,13 @@ import {
   AreaChart, Area, XAxis, YAxis, CartesianGrid,
   Tooltip, ResponsiveContainer,
 } from 'recharts';
-import { TrendingUp, ShoppingCart, Package, Receipt, Calendar } from 'lucide-react';
+import { TrendingUp, ShoppingCart, Package, Receipt, Calendar, FileDown } from 'lucide-react';
+import Link from 'next/link';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
 import { Input } from '@/components/ui/input';
 import { Text } from '@/components/ui/text';
-import { Button } from '@/components/ui/button';
+import { Button, buttonVariants } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
 import { getDashboardByRange, type DashboardRangeData } from '@/actions/ventas';
 import { formatCurrency, todayLocal, monthStartLocal, yesterdayLocal } from '@/lib/utils';
@@ -144,6 +145,10 @@ export default function DashboardClient({
           <Text as="h2" variant="title">Dashboard</Text>
           <Text variant="description">Resumen general del negocio</Text>
         </div>
+        <Link href="/dashboard/exportar" className={buttonVariants({ variant: 'outline' })}>
+          <FileDown size={13} />
+          Exportar a Excel
+        </Link>
       </div>
 
       {/* KPI fijos — siempre muestran hoy y el mes */}

@@ -8,6 +8,7 @@ import { todayLocal, monthStartLocal } from '@/lib/utils';
 import { tienePermiso } from '@/lib/permisos';
 import type { RowDataPacket, ResultSetHeader } from 'mysql2';
 import type { Venta, Producto, Abono } from '@/types';
+import { validarOpciones, type ExportVentasOpciones } from '@/lib/export-ventas';
 import { randomBytes } from 'crypto';
 
 // FIX: usa crypto.randomBytes en vez de Math.random para evitar colisiones de folio
@@ -467,4 +468,200 @@ export async function getCuentasPorCobrar(): Promise<CuentaPorCobrar[]> {
     ORDER BY v.creado_at ASC
   `);
   return rows as CuentaPorCobrar[];
+}
+
+// ─── Export de ventas a Excel (/dashboard/exportar) ───────────────────────────
+export interface VentaExportRow {
+  folio: string;
+  fecha: string;            // 'YYYY-MM-DD HH:MM:SS', hora de México
+  cliente_nombre: string | null;
+  usuario_id: number;
+  usuario_nombre: string;
+  tipo_venta: 'contado' | 'credito';
+  metodo_pago: string | null;
+  subtotal: number;         // antes de cualquier descuento
+  descuento: number;        // promoción + descuento adicional
+  total: number;
+  saldo_pendiente: number;
+}
+
+export interface DetalleVentaExportRow {
+  folio: string;
+  fecha: string;
+  producto_id: number;
+  producto_nombre: string;
+  producto_sku: string;
+  categoria_nombre: string | null;
+  marca_nombre: string | null;
+  cantidad: number;
+  precio_unitario: number;
+  descuento: number;        // promoción de la línea
+  importe: number;          // subtotal de la línea, antes del descuento adicional de la venta
+}
+
+export interface AbonoExportRow {
+  fecha: string;            // fecha del abono, hora de México
+  folio: string;
+  fecha_venta: string;
+  cliente_nombre: string | null;
+  monto: number;
+  metodo_pago: string;
+  usuario_nombre: string;   // quién cobró
+}
+
+export interface VentasExportData {
+  ventas: VentaExportRow[];
+  detalles: DetalleVentaExportRow[];
+  abonos: AbonoExportRow[];
+  /** Nombres de los vendedores filtrados, para el subtítulo del reporte. */
+  vendedoresNombres: string[];
+}
+
+export interface VentasExportPreview {
+  ventas: number;
+  piezas: number;
+  vendido: number;
+  cobrado: number;
+  saldo: number;
+  abonos: number;
+}
+
+export async function getVentasParaExport(opciones: ExportVentasOpciones): Promise<VentasExportData | null> {
+  const session = await getSession();
+  if (!session || session.rol !== 'admin') return null;
+  const o = validarOpciones(opciones);
+  if (!o) return null;
+
+  // creado_at está en UTC; -6h para el día/hora de America/Mexico_City (ver getDashboardStats).
+  // Filtros de ventas: periodo, tipo, vendedor (quien hizo la venta) y método de
+  // pago — en contado es el de la venta; en crédito, que tenga algún abono con ese método.
+  const condV: string[] = ['DATE(v.creado_at - INTERVAL 6 HOUR) BETWEEN ? AND ?'];
+  const paramsV: unknown[] = [o.desde, o.hasta];
+  if (o.tipo !== 'todos')  { condV.push('v.tipo_venta = ?'); paramsV.push(o.tipo); }
+  if (o.vendedores.length) { condV.push('v.usuario_id IN (?)'); paramsV.push(o.vendedores); }
+  if (o.metodos.length) {
+    condV.push(`((v.tipo_venta = 'contado' AND v.metodo_pago IN (?))
+      OR (v.tipo_venta = 'credito' AND EXISTS (
+        SELECT 1 FROM abonos ab WHERE ab.venta_id = v.id AND ab.metodo_pago IN (?))))`);
+    paramsV.push(o.metodos, o.metodos);
+  }
+  const whereV = condV.join(' AND ');
+
+  // Filtros de abonos: fecha del abono, método del abono y quién lo cobró.
+  // Los abonos solo existen en ventas a crédito.
+  const condA: string[] = ['DATE(a.creado_at - INTERVAL 6 HOUR) BETWEEN ? AND ?'];
+  const paramsA: unknown[] = [o.desde, o.hasta];
+  if (o.vendedores.length) { condA.push('a.usuario_id IN (?)'); paramsA.push(o.vendedores); }
+  if (o.metodos.length)    { condA.push('a.metodo_pago IN (?)'); paramsA.push(o.metodos); }
+
+  const [ventas] = await pool.query<RowDataPacket[]>(`
+    SELECT
+      v.folio,
+      DATE_FORMAT(v.creado_at - INTERVAL 6 HOUR, '%Y-%m-%d %H:%i:%s') AS fecha,
+      c.nombre AS cliente_nombre,
+      v.usuario_id,
+      u.nombre AS usuario_nombre,
+      v.tipo_venta, v.metodo_pago, v.total,
+      COALESCE(d.bruto, 0)                     AS subtotal,
+      COALESCE(d.promo, 0) + v.descuento_monto AS descuento,
+      -- Contado se cobra completo al momento; solo crédito puede tener saldo.
+      CASE WHEN v.tipo_venta = 'credito' THEN v.total - COALESCE(a.abonado, 0) ELSE 0 END AS saldo_pendiente
+    FROM ventas v
+    LEFT JOIN clientes c ON c.id = v.cliente_id
+    LEFT JOIN usuarios u ON u.id = v.usuario_id
+    LEFT JOIN (
+      SELECT venta_id, SUM(cantidad * precio_unitario) AS bruto, SUM(descuento_aplicado) AS promo
+      FROM detalles_ventas GROUP BY venta_id
+    ) d ON d.venta_id = v.id
+    LEFT JOIN (
+      SELECT venta_id, SUM(monto) AS abonado FROM abonos GROUP BY venta_id
+    ) a ON a.venta_id = v.id
+    WHERE ${whereV}
+    ORDER BY v.creado_at ASC
+  `, paramsV);
+
+  const [detalles] = await pool.query<RowDataPacket[]>(`
+    SELECT
+      v.folio,
+      DATE_FORMAT(v.creado_at - INTERVAL 6 HOUR, '%Y-%m-%d %H:%i:%s') AS fecha,
+      dv.producto_id,
+      COALESCE(p.nombre, '[Producto eliminado]') AS producto_nombre,
+      COALESCE(p.sku, '—')                       AS producto_sku,
+      cat.nombre AS categoria_nombre,
+      m.nombre   AS marca_nombre,
+      dv.cantidad, dv.precio_unitario,
+      dv.descuento_aplicado AS descuento,
+      dv.subtotal           AS importe
+    FROM detalles_ventas dv
+    JOIN ventas v            ON v.id   = dv.venta_id
+    LEFT JOIN productos p    ON p.id   = dv.producto_id
+    LEFT JOIN categorias cat ON cat.id = p.categoria_id
+    LEFT JOIN marcas m       ON m.id   = p.marca_id
+    WHERE ${whereV}
+    ORDER BY v.creado_at ASC, dv.id ASC
+  `, paramsV);
+
+  let abonos: RowDataPacket[] = [];
+  if (o.tipo !== 'contado') {
+    [abonos] = await pool.query<RowDataPacket[]>(`
+      SELECT
+        DATE_FORMAT(a.creado_at - INTERVAL 6 HOUR, '%Y-%m-%d %H:%i:%s') AS fecha,
+        v.folio,
+        DATE_FORMAT(v.creado_at - INTERVAL 6 HOUR, '%Y-%m-%d %H:%i:%s') AS fecha_venta,
+        c.nombre AS cliente_nombre,
+        a.monto, a.metodo_pago,
+        u.nombre AS usuario_nombre
+      FROM abonos a
+      JOIN ventas v        ON v.id = a.venta_id
+      LEFT JOIN clientes c ON c.id = v.cliente_id
+      LEFT JOIN usuarios u ON u.id = a.usuario_id
+      WHERE ${condA.join(' AND ')}
+      ORDER BY a.creado_at ASC
+    `, paramsA);
+  }
+
+  let vendedoresNombres: string[] = [];
+  if (o.vendedores.length) {
+    const [rows] = await pool.query<RowDataPacket[]>(
+      'SELECT nombre FROM usuarios WHERE id IN (?) ORDER BY nombre ASC', [o.vendedores]);
+    vendedoresNombres = rows.map(r => r.nombre);
+  }
+
+  return {
+    ventas: ventas.map(r => ({
+      folio: r.folio, fecha: r.fecha, cliente_nombre: r.cliente_nombre,
+      usuario_id: Number(r.usuario_id), usuario_nombre: r.usuario_nombre ?? '—',
+      tipo_venta: r.tipo_venta, metodo_pago: r.metodo_pago,
+      subtotal: Number(r.subtotal), descuento: Number(r.descuento), total: Number(r.total),
+      saldo_pendiente: Math.max(0, Number(r.saldo_pendiente)),
+    })),
+    detalles: detalles.map(r => ({
+      folio: r.folio, fecha: r.fecha, producto_id: Number(r.producto_id),
+      producto_nombre: r.producto_nombre, producto_sku: r.producto_sku,
+      categoria_nombre: r.categoria_nombre, marca_nombre: r.marca_nombre, cantidad: Number(r.cantidad),
+      precio_unitario: Number(r.precio_unitario), descuento: Number(r.descuento), importe: Number(r.importe),
+    })),
+    abonos: abonos.map(r => ({
+      fecha: r.fecha, folio: r.folio, fecha_venta: r.fecha_venta, cliente_nombre: r.cliente_nombre,
+      monto: Number(r.monto), metodo_pago: r.metodo_pago, usuario_nombre: r.usuario_nombre ?? '—',
+    })),
+    vendedoresNombres,
+  };
+}
+
+export async function getVentasExportPreview(opciones: ExportVentasOpciones): Promise<VentasExportPreview | null> {
+  const data = await getVentasParaExport(opciones);
+  if (!data) return null;
+  const r2 = (n: number) => parseFloat(n.toFixed(2));
+  // "Cobrado" = ventas de contado + abonos del periodo (mismo criterio que "Ingresos" del Dashboard).
+  const cobrado = data.ventas.filter(v => v.tipo_venta === 'contado').reduce((s, v) => s + v.total, 0)
+    + data.abonos.reduce((s, a) => s + a.monto, 0);
+  return {
+    ventas:  data.ventas.length,
+    piezas:  data.detalles.reduce((s, d) => s + d.cantidad, 0),
+    vendido: r2(data.ventas.reduce((s, v) => s + v.total, 0)),
+    cobrado: r2(cobrado),
+    saldo:   r2(data.ventas.reduce((s, v) => s + v.saldo_pendiente, 0)),
+    abonos:  data.abonos.length,
+  };
 }
