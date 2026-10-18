@@ -18,6 +18,7 @@ import { FormField, TextareaField, FieldGroup } from '@/components/ui/form-field
 import { ImageUpload } from '@/components/ui/image-upload';
 import { crearProducto, actualizarProducto, eliminarProducto } from '@/actions/productos';
 import { cn, formatCurrency, formatDate } from '@/lib/utils';
+import { urlRetornoProductos } from '@/lib/productos-filtros';
 import { zodResolver, productoSchema, type ProductoFormValues } from '@/lib/validations';
 import type { Producto, Categoria, Marca, Coleccion, MovimientoInventario } from '@/types';
 
@@ -110,7 +111,7 @@ export default function ProductoFormView({
 
       if (r?.error) { toast.error(r.error); return; }
       toast.success(modo === 'crear' ? 'Producto creado.' : 'Cambios guardados.');
-      router.push('/productos');
+      router.push(urlRetornoProductos());
       router.refresh();
     });
   }
@@ -120,7 +121,7 @@ export default function ProductoFormView({
       const r = await eliminarProducto(producto!.id);
       if (r?.error) { toast.error(r.error); return; }
       toast.success('Producto eliminado.');
-      router.push('/productos');
+      router.push(urlRetornoProductos());
       router.refresh();
     });
   }
@@ -136,7 +137,7 @@ export default function ProductoFormView({
             variant="ghost"
             size="icon"
             className="h-8 w-8 -ml-2"
-            onClick={() => router.push('/productos')}
+            onClick={() => router.push(urlRetornoProductos())}
           >
             <ArrowLeft size={16} />
           </Button>
@@ -171,7 +172,7 @@ export default function ProductoFormView({
             type="button"
             variant="outline"
             size="sm"
-            onClick={() => router.push('/productos')}
+            onClick={() => router.push(urlRetornoProductos())}
           >
             Cancelar
           </Button>
@@ -426,7 +427,7 @@ export default function ProductoFormView({
         <div className="sticky bottom-0 mt-4 flex items-center justify-between gap-3 rounded-lg border border-border bg-background/95 backdrop-blur-sm px-4 py-3 shadow-lg">
           <p className="text-sm text-muted-foreground">Tienes cambios sin guardar</p>
           <div className="flex items-center gap-2">
-            <Button type="button" variant="outline" size="sm" onClick={() => router.push('/productos')}>
+            <Button type="button" variant="outline" size="sm" onClick={() => router.push(urlRetornoProductos())}>
               Descartar
             </Button>
             <Button type="submit" size="sm" variant="default" disabled={pending} className="gap-1.5">

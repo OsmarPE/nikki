@@ -32,6 +32,9 @@ interface DataTableProps<TData, TValue> {
   filterColumn?: string;
   pageSize?: number;
   emptyMessage?: string;
+  /** Página controlada desde fuera (0-based), p. ej. para persistirla en la URL. */
+  pageIndex?: number;
+  onPageIndexChange?: (pageIndex: number) => void;
 }
 
 export function DataTable<TData, TValue>({
@@ -41,9 +44,12 @@ export function DataTable<TData, TValue>({
   filterColumn,
   pageSize = 20,
   emptyMessage = 'Sin resultados.',
+  pageIndex,
+  onPageIndexChange,
 }: DataTableProps<TData, TValue>) {
   const [sorting, setSorting] = useState<SortingState>([]);
   const [columnFilters, setColumnFilters] = useState<ColumnFiltersState>([]);
+  const controlado = pageIndex !== undefined && onPageIndexChange !== undefined;
 
   const table = useReactTable({
     data,
@@ -54,8 +60,18 @@ export function DataTable<TData, TValue>({
     getFilteredRowModel: getFilteredRowModel(),
     onSortingChange: setSorting,
     onColumnFiltersChange: setColumnFilters,
-    initialState: { pagination: { pageSize } },
-    state: { sorting, columnFilters },
+    initialState: { pagination: { pageIndex: 0, pageSize } },
+    state: controlado
+      ? { sorting, columnFilters, pagination: { pageIndex, pageSize } }
+      : { sorting, columnFilters },
+    ...(controlado && {
+      // El dueño del estado decide cuándo reiniciar la página (al cambiar filtros).
+      autoResetPageIndex: false,
+      onPaginationChange: updater => {
+        const next = typeof updater === 'function' ? updater({ pageIndex, pageSize }) : updater;
+        onPageIndexChange(next.pageIndex);
+      },
+    }),
   });
 
   return (

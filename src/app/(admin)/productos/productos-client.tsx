@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useTransition, useMemo, useCallback, useRef } from 'react';
+import { useState, useTransition, useMemo, useCallback, useRef, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { toast } from 'sonner';
 import { ColumnDef } from '@tanstack/react-table';
@@ -14,6 +14,7 @@ import { ConfirmDialog } from '@/components/ui/confirm-dialog';
 import { Text } from '@/components/ui/text';
 import { eliminarProducto } from '@/actions/productos';
 import { formatCurrency } from '@/lib/utils';
+import { productosFiltrosQuery, guardarRetornoProductos, type ProductosFiltros } from '@/lib/productos-filtros';
 import type { Producto, Categoria, Marca, Coleccion } from '@/types';
 
 interface Props {
@@ -21,6 +22,7 @@ interface Props {
   categorias: Categoria[];
   marcas: Marca[];
   colecciones: Coleccion[];
+  filtrosIniciales: ProductosFiltros;
   permisos: { crear: boolean; editar: boolean; eliminar: boolean };
 }
 
@@ -186,14 +188,26 @@ function ProductosFiltroPanel({
 }
 
 // ─── Componente principal ─────────────────────────────────────────────────────
-export default function ProductosClient({ productos, categorias, marcas, colecciones, permisos }: Props) {
+const PAGE_SIZE = 20;
+
+export default function ProductosClient({ productos, categorias, marcas, colecciones, filtrosIniciales, permisos }: Props) {
   const router = useRouter();
-  const [busqueda, setBusqueda] = useState('');
   const [filtroOpen, setFiltroOpen] = useState(false);
-  const [marcasFiltro, setMarcasFiltro] = useState<Set<string>>(new Set());
-  const [categoriasFiltro, setCategoriasFiltro] = useState<Set<string>>(new Set());
-  const [coleccionesFiltro, setColeccionesFiltro] = useState<Set<string>>(new Set());
-  const [soloSinStock, setSoloSinStock] = useState(false);
+  // Los filtros arrancan desde la URL y se reflejan en ella (ver efecto abajo),
+  // así se conservan al entrar al detalle de un producto y regresar.
+  const [busqueda, setBusquedaState] = useState(filtrosIniciales.busqueda);
+  const [marcasFiltro, setMarcasState] = useState<Set<string>>(() => new Set(filtrosIniciales.marcas));
+  const [categoriasFiltro, setCategoriasState] = useState<Set<string>>(() => new Set(filtrosIniciales.categorias));
+  const [coleccionesFiltro, setColeccionesState] = useState<Set<string>>(() => new Set(filtrosIniciales.colecciones));
+  const [soloSinStock, setSoloSinStockState] = useState(filtrosIniciales.soloSinStock);
+  const [pagina, setPagina] = useState(filtrosIniciales.pagina);
+
+  // Cualquier cambio de filtro regresa a la primera página.
+  const setBusqueda          = (v: string)      => { setBusquedaState(v);    setPagina(0); };
+  const setMarcasFiltro      = (v: Set<string>) => { setMarcasState(v);      setPagina(0); };
+  const setCategoriasFiltro  = (v: Set<string>) => { setCategoriasState(v);  setPagina(0); };
+  const setColeccionesFiltro = (v: Set<string>) => { setColeccionesState(v); setPagina(0); };
+  const setSoloSinStock      = (v: boolean)     => { setSoloSinStockState(v); setPagina(0); };
   const [, startTransition] = useTransition();
   const [exportando, setExportando] = useState(false);
   async function handleExport() {
@@ -233,6 +247,22 @@ export default function ProductosClient({ productos, categorias, marcas, colecci
     const matchStock      = !soloSinStock || Number(p.stock ?? 0) <= 0;
     return matchBusqueda && matchMarca && matchCategoria && matchColeccion && matchStock;
   }), [productos, busqueda, marcasFiltro, categoriasFiltro, coleccionesFiltro, soloSinStock]);
+
+  // Si la página guardada ya no existe (p. ej. se eliminaron productos), se ajusta a la última.
+  const paginaVisible = Math.min(pagina, Math.max(0, Math.ceil(filtrados.length / PAGE_SIZE) - 1));
+
+  useEffect(() => {
+    const query = productosFiltrosQuery({
+      busqueda,
+      marcas:      [...marcasFiltro],
+      categorias:  [...categoriasFiltro],
+      colecciones: [...coleccionesFiltro],
+      soloSinStock,
+      pagina:      paginaVisible,
+    });
+    window.history.replaceState(null, '', `/productos${query}`);
+    guardarRetornoProductos(query);
+  }, [busqueda, marcasFiltro, categoriasFiltro, coleccionesFiltro, soloSinStock, paginaVisible]);
 
   function pedirEliminar(id: number, nombre: string) {
     setConfirmTarget({ id, nombre });
@@ -389,7 +419,7 @@ export default function ProductosClient({ productos, categorias, marcas, colecci
         {sinStockCount > 0 && (
           <button
             type="button"
-            onClick={() => setSoloSinStock(v => !v)}
+            onClick={() => setSoloSinStock(!soloSinStock)}
             className={[
               'inline-flex items-center gap-1.5 h-8 rounded-md border px-2.5 text-sm transition-colors',
               soloSinStock
@@ -415,7 +445,8 @@ export default function ProductosClient({ productos, categorias, marcas, colecci
         </span>
       </div>
 
-      <DataTable columns={columns} data={filtrados} emptyMessage="Sin productos." pageSize={20} />
+      <DataTable columns={columns} data={filtrados} emptyMessage="Sin productos." pageSize={PAGE_SIZE}
+        pageIndex={paginaVisible} onPageIndexChange={setPagina} />
 
       <ConfirmDialog
         open={confirmOpen}
