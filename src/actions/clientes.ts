@@ -16,7 +16,7 @@ export async function getClientes(): Promise<Cliente[]> {
 
 export async function crearCliente(data: { nombre: string; telefono?: string; email?: string }) {
   const session = await getSession();
-  if (!session) return { error: 'Sin sesión.' };
+  if (!tienePermiso(session, 'clientes', 'crear')) return { error: 'Sin permiso.' };
   const [result] = await pool.query(
     'INSERT INTO clientes (nombre, telefono, email) VALUES (?, ?, ?)',
     [data.nombre.trim(), data.telefono || null, data.email || null]
