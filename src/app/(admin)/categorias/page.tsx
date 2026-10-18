@@ -9,6 +9,7 @@ export default async function CategoriasPage() {
   return (
     <CatalogoSimpleClient
       titulo="Categorías"
+      rutaBase="/categorias"
       items={items}
       onCreate={crearCategoria}
       onUpdate={actualizarCategoria}

@@ -2,6 +2,7 @@
 
 import { reload } from '@/hooks/use-reload';
 import { useState, useTransition, useMemo, useCallback } from 'react';
+import Link from 'next/link';
 import { useForm } from 'react-hook-form';
 import { toast } from 'sonner';
 import { ColumnDef } from '@tanstack/react-table';
@@ -20,6 +21,8 @@ interface Item { id: number; nombre: string }
 
 interface Props {
   titulo: string;
+  /** Ruta del listado (p. ej. '/categorias'); cada nombre enlaza a `${rutaBase}/[id]`. */
+  rutaBase: string;
   items: Item[];
   onCreate: (nombre: string) => Promise<{ success?: boolean; error?: string } | undefined>;
   onUpdate: (id: number, nombre: string) => Promise<{ success?: boolean; error?: string } | undefined>;
@@ -74,7 +77,7 @@ function CatalogoForm({
 }
 
 // ─── Componente principal ─────────────────────────────────────────────────────
-export default function CatalogoSimpleClient({ titulo, items: initial, onCreate, onUpdate, onDelete, onCheckUso, permisos }: Props) {
+export default function CatalogoSimpleClient({ titulo, rutaBase, items: initial, onCreate, onUpdate, onDelete, onCheckUso, permisos }: Props) {
   const [items] = useState(initial);
   const [sheet, setSheet] = useState<{ modo: 'crear' | 'editar'; id?: number; nombre?: string } | null>(null);
   const [confirmOpen, setConfirmOpen] = useState(false);
@@ -135,10 +138,11 @@ export default function CatalogoSimpleClient({ titulo, items: initial, onCreate,
       accessorKey: 'nombre',
       header: 'Nombre',
       cell: ({ row }) => (
-        <div className="flex items-center gap-2 text-sm">
+        <Link href={`${rutaBase}/${row.original.id}`}
+          className="inline-flex items-center gap-2 text-sm hover:underline underline-offset-4">
           <Tag size={13} className="text-muted-foreground shrink-0" />
           {row.original.nombre}
-        </div>
+        </Link>
       ),
     },
     ...(permisos.editar || permisos.eliminar ? [{
@@ -168,7 +172,7 @@ export default function CatalogoSimpleClient({ titulo, items: initial, onCreate,
         </div>
       ),
     } as ColumnDef<Item>] : []),
-  ], [handleEliminar, permisos.editar, permisos.eliminar]);
+  ], [rutaBase, handleEliminar, permisos.editar, permisos.eliminar]);
 
   return (
     <div className="space-y-6">

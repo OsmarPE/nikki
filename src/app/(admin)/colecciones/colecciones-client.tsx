@@ -2,6 +2,7 @@
 
 import { reload } from '@/hooks/use-reload';
 import { useState, useTransition, useMemo, useCallback } from 'react';
+import Link from 'next/link';
 import { useForm } from 'react-hook-form';
 import { toast } from 'sonner';
 import { ColumnDef } from '@tanstack/react-table';
@@ -119,10 +120,11 @@ export default function ColeccionesClient({ items: initial }: { items: Coleccion
       accessorKey: 'nombre',
       header: 'Nombre',
       cell: ({ row }) => (
-        <div className={`flex items-center gap-2 text-sm ${row.original.deleted_at ? 'text-muted-foreground line-through' : ''}`}>
+        <Link href={`/colecciones/${row.original.id}`}
+          className={`inline-flex items-center gap-2 text-sm hover:underline underline-offset-4 ${row.original.deleted_at ? 'text-muted-foreground line-through' : ''}`}>
           <Layers2 size={13} className="text-muted-foreground shrink-0" />
           {row.original.nombre}
-        </div>
+        </Link>
       ),
     },
     {

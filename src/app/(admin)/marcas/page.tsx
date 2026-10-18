@@ -9,6 +9,7 @@ export default async function MarcasPage() {
   return (
     <CatalogoSimpleClient
       titulo="Marcas"
+      rutaBase="/marcas"
       items={items}
       onCreate={crearMarca}
       onUpdate={actualizarMarca}

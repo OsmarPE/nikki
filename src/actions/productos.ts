@@ -143,3 +143,35 @@ export async function eliminarProducto(id: number) {
   revalidatePath('/productos');
   return { success: true };
 }
+
+// ─── Productos de una categoría / marca / colección ──────────────────────────
+const CATALOGO_COLUMNA = {
+  categoria: 'categoria_id',
+  marca:     'marca_id',
+  coleccion: 'coleccion_id',
+} as const;
+
+export async function getProductosPorCatalogo(
+  tipo: keyof typeof CATALOGO_COLUMNA,
+  id: number,
+): Promise<Producto[]> {
+  const session = await getSession();
+  const modulo = tipo === 'categoria' ? 'categorias' : tipo === 'marca' ? 'marcas' : 'colecciones';
+  if (!tienePermiso(session, modulo, 'ver')) return [];
+  // La columna sale de un mapa fijo, nunca del input.
+  const columna = CATALOGO_COLUMNA[tipo];
+  const [rows] = await pool.query<RowDataPacket[]>(`
+    SELECT
+      p.*,
+      c.nombre   AS categoria_nombre,
+      m.nombre   AS marca_nombre,
+      col.nombre AS coleccion_nombre
+    FROM productos p
+    LEFT JOIN categorias  c   ON c.id   = p.categoria_id
+    LEFT JOIN marcas       m   ON m.id   = p.marca_id
+    LEFT JOIN colecciones  col ON col.id = p.coleccion_id
+    WHERE p.activo = 1 AND p.${columna} = ?
+    ORDER BY p.nombre ASC
+  `, [id]);
+  return rows as Producto[];
+}

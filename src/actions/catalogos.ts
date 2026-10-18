@@ -169,3 +169,21 @@ export async function restaurarColeccion(id: number) {
   revalidatePath('/colecciones');
   return { success: true };
 }
+
+// ─── Detalle de un elemento de catálogo ──────────────────────────────────────
+export async function getCatalogoItem(
+  tipo: 'categoria' | 'marca' | 'coleccion',
+  id: number,
+): Promise<{ id: number; nombre: string; archivada: boolean } | null> {
+  const session = await getSession();
+  const modulo = tipo === 'categoria' ? 'categorias' : tipo === 'marca' ? 'marcas' : 'colecciones';
+  if (!tienePermiso(session, modulo, 'ver')) return null;
+  const sql = {
+    categoria: 'SELECT id, nombre, 0 AS archivada FROM categorias WHERE id = ?',
+    marca:     'SELECT id, nombre, 0 AS archivada FROM marcas WHERE id = ?',
+    coleccion: 'SELECT id, nombre, deleted_at IS NOT NULL AS archivada FROM colecciones WHERE id = ?',
+  }[tipo];
+  const [rows] = await pool.query<RowDataPacket[]>(sql, [id]);
+  if (!rows[0]) return null;
+  return { id: rows[0].id, nombre: rows[0].nombre, archivada: Boolean(Number(rows[0].archivada)) };
+}
