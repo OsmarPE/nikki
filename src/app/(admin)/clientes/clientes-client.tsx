@@ -3,13 +3,14 @@
 import { reload } from '@/hooks/use-reload';
 import { usePagination } from '@/hooks/use-pagination';
 import { PaginationControls } from '@/components/ui/pagination-controls';
-import { useState, useTransition } from 'react';
+import { useState, useTransition, useSyncExternalStore } from 'react';
 import { useForm } from 'react-hook-form';
 import { toast } from 'sonner';
-import { UserRound, Phone, Mail, MoreVertical, Pencil, Trash2, UserPlus, FileDown } from 'lucide-react';
+import { UserRound, Phone, Mail, MoreVertical, Pencil, Trash2, UserPlus, FileDown, LayoutGrid, List } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Card } from '@/components/ui/card';
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription, SheetFooter } from '@/components/ui/sheet';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { FormField, FieldGroup } from '@/components/ui/form-field';
@@ -57,6 +58,73 @@ function ClienteForm({ defaultValues, onSubmit, pending, onCancel, modo }: {
   );
 }
 
+// ─── Vista lista/tarjetas, recordada por navegador ────────────────────────────
+type Vista = 'lista' | 'tarjetas';
+const VISTA_KEY = 'clientes:vista';
+const vistaListeners = new Set<() => void>();
+
+function leerVista(): Vista {
+  try { return localStorage.getItem(VISTA_KEY) === 'tarjetas' ? 'tarjetas' : 'lista'; }
+  catch { return 'lista'; }
+}
+
+function guardarVista(v: Vista) {
+  try { localStorage.setItem(VISTA_KEY, v); } catch { /* storage bloqueado */ }
+  vistaListeners.forEach(l => l());
+}
+
+function suscribirVista(l: () => void) {
+  vistaListeners.add(l);
+  return () => { vistaListeners.delete(l); };
+}
+
+function useVista(): Vista {
+  return useSyncExternalStore(suscribirVista, leerVista, () => 'lista');
+}
+
+function VistaToggle({ vista }: { vista: Vista }) {
+  const opciones = [
+    { value: 'lista' as const,    icon: List,       label: 'Ver como lista' },
+    { value: 'tarjetas' as const, icon: LayoutGrid, label: 'Ver como tarjetas' },
+  ];
+  return (
+    <div className="inline-flex items-center rounded-md border border-border p-0.5">
+      {opciones.map(({ value, icon: Icon, label }) => (
+        <button key={value} type="button" aria-label={label} title={label}
+          aria-pressed={vista === value}
+          onClick={() => guardarVista(value)}
+          className={[
+            'h-7 w-7 inline-flex items-center justify-center rounded-[5px] transition-colors',
+            vista === value ? 'bg-accent text-foreground' : 'text-muted-foreground hover:text-foreground',
+          ].join(' ')}>
+          <Icon size={14} />
+        </button>
+      ))}
+    </div>
+  );
+}
+
+function ClienteAcciones({ onEditar, onEliminar }: { onEditar: () => void; onEliminar: () => void }) {
+  return (
+    <DropdownMenu>
+      <DropdownMenuTrigger render={<Button variant="ghost" size="icon" className="h-7 w-7" aria-label="Abrir menú" />}>
+        <MoreVertical size={14} />
+      </DropdownMenuTrigger>
+      <DropdownMenuContent align="end">
+        <DropdownMenuItem onClick={onEditar}>
+          <Pencil size={13} className="mr-2" /> Editar
+        </DropdownMenuItem>
+        <DropdownMenuItem
+          className="text-destructive focus:text-destructive focus:bg-destructive/10"
+          onClick={onEliminar}
+        >
+          <Trash2 size={13} className="mr-2" /> Eliminar
+        </DropdownMenuItem>
+      </DropdownMenuContent>
+    </DropdownMenu>
+  );
+}
+
 const EMPTY: ClienteFormValues = { nombre: '', telefono: '', email: '' };
 
 export default function ClientesClient({ clientes: initial }: { clientes: Cliente[] }) {
@@ -67,6 +135,7 @@ export default function ClientesClient({ clientes: initial }: { clientes: Client
   const [defaultValues, setDefaultValues] = useState<ClienteFormValues>(EMPTY);
   const [pending, startTransition] = useTransition();
   const [exportando, setExportando] = useState(false);
+  const vista = useVista();
 
   // ConfirmDialog state
   const [confirmOpen, setConfirmOpen] = useState(false);
@@ -161,13 +230,61 @@ export default function ClientesClient({ clientes: initial }: { clientes: Client
         </div>
       </div>
 
-      <Input placeholder="Buscar por nombre, teléfono o email…"
-        value={busqueda} onChange={e => setBusqueda(e.target.value)} className="max-w-sm" />
+      <div className="flex items-center gap-2">
+        <Input placeholder="Buscar por nombre, teléfono o email…"
+          value={busqueda} onChange={e => setBusqueda(e.target.value)} className="max-w-sm" />
+        <div className="ml-auto">
+          <VistaToggle vista={vista} />
+        </div>
+      </div>
 
       {todosLos.length === 0 ? (
         <p className="py-8 text-center text-sm text-muted-foreground">Sin clientes.</p>
       ) : (
         <>
+        {vista === 'lista' ? (
+          <div className="rounded-md border">
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Cliente</TableHead>
+                  <TableHead>Teléfono</TableHead>
+                  <TableHead className="hidden md:table-cell">Correo</TableHead>
+                  <TableHead className="hidden sm:table-cell">Alta</TableHead>
+                  <TableHead className="w-10" />
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {filtrados.map(c => (
+                  <TableRow key={c.id}>
+                    <TableCell>
+                      <div className="flex items-center gap-2.5">
+                        <div className="h-7 w-7 rounded-full bg-muted flex items-center justify-center shrink-0">
+                          <UserRound size={13} className="text-muted-foreground" />
+                        </div>
+                        <span className="font-medium text-sm">{c.nombre}</span>
+                      </div>
+                    </TableCell>
+                    <TableCell className="text-sm text-muted-foreground">
+                      {c.telefono ?? <span className="text-muted-foreground/50 italic">—</span>}
+                    </TableCell>
+                    <TableCell className="hidden md:table-cell text-sm text-muted-foreground">
+                      {c.email ?? <span className="text-muted-foreground/50 italic">—</span>}
+                    </TableCell>
+                    <TableCell className="hidden sm:table-cell text-xs text-muted-foreground">
+                      {formatDate(c.creado_at)}
+                    </TableCell>
+                    <TableCell>
+                      <div className="flex justify-end">
+                        <ClienteAcciones onEditar={() => abrirEditar(c)} onEliminar={() => pedirEliminar(c)} />
+                      </div>
+                    </TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          </div>
+        ) : (
         <div className="grid gap-3 grid-cols-1 sm:grid-cols-2 lg:grid-cols-3">
           {filtrados.map(c => (
             <Card key={c.id} className="p-4 flex flex-col gap-3">
@@ -181,22 +298,9 @@ export default function ClientesClient({ clientes: initial }: { clientes: Client
                     <p className="text-[11px] text-muted-foreground mt-0.5">{formatDate(c.creado_at)}</p>
                   </div>
                 </div>
-                <DropdownMenu>
-                  <DropdownMenuTrigger render={<Button variant="ghost" size="icon" className="h-7 w-7 -mr-1 -mt-0.5" aria-label="Abrir menú" />}>
-                    <MoreVertical size={14} />
-                  </DropdownMenuTrigger>
-                  <DropdownMenuContent align="end">
-                    <DropdownMenuItem onClick={() => abrirEditar(c)}>
-                      <Pencil size={13} className="mr-2" /> Editar
-                    </DropdownMenuItem>
-                    <DropdownMenuItem
-                      className="text-destructive focus:text-destructive focus:bg-destructive/10"
-                      onClick={() => pedirEliminar(c)}
-                    >
-                      <Trash2 size={13} className="mr-2" /> Eliminar
-                    </DropdownMenuItem>
-                  </DropdownMenuContent>
-                </DropdownMenu>
+                <div className="-mr-1 -mt-0.5">
+                  <ClienteAcciones onEditar={() => abrirEditar(c)} onEliminar={() => pedirEliminar(c)} />
+                </div>
               </div>
               <div className="space-y-1.5 border-t border-dashed border-border pt-3">
                 <p className="flex items-center gap-2 text-[13px] text-muted-foreground">
@@ -211,6 +315,7 @@ export default function ClientesClient({ clientes: initial }: { clientes: Client
             </Card>
           ))}
         </div>
+        )}
         <PaginationControls
           page={pag.page}
           totalPages={pag.totalPages}
