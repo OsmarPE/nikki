@@ -258,6 +258,43 @@ export async function getVentas(filtro?: { desde?: string; hasta?: string }): Pr
   return rows as Venta[];
 }
 
+// ─── Abonos cobrados (lista de Ventas) ────────────────────────────────────────
+// Un abono se muestra en el día en que se cobró, no en el de la venta original.
+export interface AbonoListado {
+  id: number;
+  venta_id: number;
+  folio: string;
+  cliente_nombre: string | null;
+  monto: number;
+  metodo_pago: 'efectivo' | 'transferencia' | 'tarjeta';
+  usuario_nombre: string | null;   // quién lo cobró
+  creado_at: string;
+  venta_creado_at: string;
+  /** Este abono dejó el saldo de la venta en 0. */
+  liquidacion: boolean;
+}
+
+export async function getAbonosRecientes(): Promise<AbonoListado[]> {
+  const session = await getSession();
+  if (!tienePermiso(session, 'ventas', 'ver')) return [];
+
+  // `liquidacion`: el acumulado de abonos de la venta hasta este abono ya cubre el total.
+  const [rows] = await pool.query<RowDataPacket[]>(`
+    SELECT
+      a.id, a.venta_id, v.folio, c.nombre AS cliente_nombre,
+      a.monto, a.metodo_pago, u.nombre AS usuario_nombre,
+      a.creado_at, v.creado_at AS venta_creado_at,
+      SUM(a.monto) OVER (PARTITION BY a.venta_id ORDER BY a.creado_at, a.id) >= v.total AS liquidacion
+    FROM abonos a
+    JOIN ventas v        ON v.id = a.venta_id
+    LEFT JOIN clientes c ON c.id = v.cliente_id
+    LEFT JOIN usuarios u ON u.id = a.usuario_id
+    ORDER BY a.creado_at DESC, a.id DESC
+    LIMIT 500
+  `);
+  return rows.map(r => ({ ...r, monto: Number(r.monto), liquidacion: Boolean(Number(r.liquidacion)) })) as AbonoListado[];
+}
+
 export async function getVentaDetalle(ventaId: number): Promise<Venta | null> {
   const [ventaRows] = await pool.query<RowDataPacket[]>(`
     SELECT v.*, c.nombre AS cliente_nombre, u.nombre AS usuario_nombre,
@@ -446,6 +483,10 @@ export interface CuentaPorCobrar {
   abonado: number;
   saldo_pendiente: number;
   creado_at: string;
+  /** Fecha del abono más reciente; null si nunca ha abonado. */
+  ultimo_abono: string | null;
+  /** Días desde el último abono (o desde la venta, si no hay abonos). */
+  dias_sin_abonar: number;
 }
 
 export async function getCuentasPorCobrar(): Promise<CuentaPorCobrar[]> {
@@ -457,7 +498,10 @@ export async function getCuentasPorCobrar(): Promise<CuentaPorCobrar[]> {
       v.id AS venta_id, v.folio, v.cliente_id, c.nombre AS cliente_nombre,
       u.nombre AS usuario_nombre, v.total, v.creado_at,
       COALESCE(SUM(a.monto), 0)              AS abonado,
-      v.total - COALESCE(SUM(a.monto), 0)    AS saldo_pendiente
+      v.total - COALESCE(SUM(a.monto), 0)    AS saldo_pendiente,
+      MAX(a.creado_at)                       AS ultimo_abono,
+      -- -6h en ambos lados: días calendario de America/Mexico_City (ver getDashboardStats).
+      DATEDIFF(NOW() - INTERVAL 6 HOUR, COALESCE(MAX(a.creado_at), v.creado_at) - INTERVAL 6 HOUR) AS dias_sin_abonar
     FROM ventas v
     JOIN clientes c      ON c.id = v.cliente_id
     JOIN usuarios u      ON u.id = v.usuario_id
@@ -467,7 +511,7 @@ export async function getCuentasPorCobrar(): Promise<CuentaPorCobrar[]> {
     HAVING saldo_pendiente > 0
     ORDER BY v.creado_at ASC
   `);
-  return rows as CuentaPorCobrar[];
+  return rows.map(r => ({ ...r, dias_sin_abonar: Number(r.dias_sin_abonar) })) as CuentaPorCobrar[];
 }
 
 // ─── Export de ventas a Excel (/dashboard/exportar) ───────────────────────────

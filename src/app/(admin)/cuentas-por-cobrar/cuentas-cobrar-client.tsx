@@ -57,6 +57,13 @@ function buildColumns(router: ReturnType<typeof useRouter>): ColumnDef<CuentaPor
       ),
     },
     {
+      accessorKey: 'ultimo_abono',
+      header: 'Último abono',
+      cell: ({ row }) => row.original.ultimo_abono
+        ? <span className="text-sm">{formatDate(row.original.ultimo_abono)}</span>
+        : <span className="text-muted-foreground italic text-sm">Sin abonos</span>,
+    },
+    {
       accessorKey: 'creado_at',
       header: 'Fecha de venta',
       cell: ({ row }) => <span className="text-muted-foreground text-sm">{formatDate(row.original.creado_at)}</span>,
@@ -75,11 +82,19 @@ function buildColumns(router: ReturnType<typeof useRouter>): ColumnDef<CuentaPor
   ];
 }
 
+const SIN_ABONAR = [
+  { dias: 0,  label: 'Todas' },
+  { dias: 15, label: '+15 días' },
+  { dias: 30, label: '+30 días' },
+  { dias: 60, label: '+60 días' },
+];
+
 export default function CuentasPorCobrarClient({ cuentas }: { cuentas: CuentaPorCobrar[] }) {
   const router = useRouter();
   const columns = useMemo(() => buildColumns(router), [router]);
   const [busqueda, setBusqueda] = useState('');
   const [clientes, setClientes] = useState<Set<string>>(new Set());
+  const [minDias, setMinDias] = useState(0);
 
   // Un cliente por id (no por nombre, para no mezclar homónimos), con el
   // conteo de cuentas pendientes que tiene — alimenta el filtro facetado.
@@ -100,15 +115,17 @@ export default function CuentasPorCobrarClient({ cuentas }: { cuentas: CuentaPor
         c.cliente_nombre.toLowerCase().includes(busqueda.toLowerCase()) ||
         c.folio.toLowerCase().includes(busqueda.toLowerCase());
       const matchCliente = clientes.size === 0 || clientes.has(String(c.cliente_id));
-      return matchBusqueda && matchCliente;
+      const matchDias = c.dias_sin_abonar >= minDias;
+      return matchBusqueda && matchCliente && matchDias;
     }),
-  [cuentas, busqueda, clientes]);
+  [cuentas, busqueda, clientes, minDias]);
 
-  const hayFiltros = busqueda !== '' || clientes.size > 0;
+  const hayFiltros = busqueda !== '' || clientes.size > 0 || minDias > 0;
 
   function limpiarTodo() {
     setBusqueda('');
     setClientes(new Set());
+    setMinDias(0);
   }
 
   const totalPorCobrar = useMemo(
@@ -149,6 +166,21 @@ export default function CuentasPorCobrarClient({ cuentas }: { cuentas: CuentaPor
           selected={clientes}
           onSelectionChange={setClientes}
         /> */}
+
+        {/* Cuentas "olvidadas": sin abonar en X días (o sin abonos desde la venta) */}
+        <div className="inline-flex items-center rounded-md border border-border p-0.5">
+          <span className="px-2 text-xs text-muted-foreground">Sin abonar en</span>
+          {SIN_ABONAR.map(o => (
+            <button key={o.dias} type="button" aria-pressed={minDias === o.dias}
+              onClick={() => setMinDias(o.dias)}
+              className={[
+                'h-7 px-2.5 rounded-[5px] text-xs transition-colors',
+                minDias === o.dias ? 'bg-accent text-foreground font-medium' : 'text-muted-foreground hover:text-foreground',
+              ].join(' ')}>
+              {o.label}
+            </button>
+          ))}
+        </div>
 
         {hayFiltros && (
           <Button variant="outline" size="sm" onClick={limpiarTodo} className="h-8 px-2 text-muted-foreground hover:text-foreground gap-1.5">

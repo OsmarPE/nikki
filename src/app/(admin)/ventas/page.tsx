@@ -1,7 +1,7 @@
-import { getVentas } from '@/actions/ventas';
+import { getVentas, getAbonosRecientes } from '@/actions/ventas';
 import VentasClient from './ventas-client';
 
 export default async function VentasPage() {
-  const ventas = await getVentas();
-  return <VentasClient ventas={ventas} />;
+  const [ventas, abonos] = await Promise.all([getVentas(), getAbonosRecientes()]);
+  return <VentasClient ventas={ventas} abonos={abonos} />;
 }
