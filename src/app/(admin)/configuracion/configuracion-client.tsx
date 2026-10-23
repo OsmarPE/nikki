@@ -163,6 +163,12 @@ function PermisosForm({
                 ))}
               </tbody>
             </table>
+            <ul className="mt-4 space-y-1.5 text-[11px] text-muted-foreground leading-relaxed list-disc pl-4">
+              <li><b>Ventas › Ver</b> da acceso al historial de ventas y a la pantalla de Abonos.</li>
+              <li><b>Ventas › Crear</b> permite vender y cobrar abonos. El vendedor abre su propia caja al hacerlo.</li>
+              <li><b>Caja</b> solo controla la pantalla de Caja (historial y cortes); no es necesaria para vender.</li>
+              <li>Los cambios aplican la próxima vez que el usuario <b>cierre sesión y vuelva a entrar</b>.</li>
+            </ul>
           </div>
         )}
       </div>

@@ -7,7 +7,7 @@ import { toast } from 'sonner';
 import {
   ArrowLeft, FileDown, User, Store,
   CreditCard, Banknote, ArrowRightLeft,
-  Package, Hash, Calendar, Receipt, Wallet, Plus, X,
+  Package, Hash, Calendar, Receipt, Wallet, Plus, X, Vault,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Separator } from '@/components/ui/separator';
@@ -15,7 +15,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/u
 import { FormField } from '@/components/ui/form-field';
 import { cn, formatCurrency, formatDateLong, formatTime } from '@/lib/utils';
 import { registrarAbono } from '@/actions/ventas';
-import { getSesionAbierta } from '@/actions/caja';
+import { getSesionAbierta, abrirCaja } from '@/actions/caja';
 import { zodResolver, abonoSchema, type AbonoFormValues } from '@/lib/validations';
 import type { Venta } from '@/types';
 
@@ -56,16 +56,33 @@ function StatCard({
 }
 
 // ─── Modal — registrar abono ────────────────────────────────────────────────────
+// El abono se registra en la caja abierta de quien lo cobra (para que el
+// efectivo cuadre en su corte). Si no tiene caja abierta, el modal le permite
+// abrirla ahí mismo antes de capturar el abono.
 function RegistrarAbonoModal({
-  open, onClose, ventaId, saldoPendiente, onRegistrado,
+  open, onClose, ventaId, saldoPendiente, onRegistrado, cajaAbierta: cajaAbiertaInicial,
 }: {
   open: boolean;
   onClose: () => void;
   ventaId: number;
   saldoPendiente: number;
   onRegistrado: () => void;
+  cajaAbierta: boolean;
 }) {
   const [pending, startTransition] = useTransition();
+  const [cajaAbierta, setCajaAbierta] = useState(cajaAbiertaInicial);
+  const [saldoInicial, setSaldoInicial] = useState('0');
+
+  function handleAbrirCaja() {
+    const monto = Number(saldoInicial);
+    if (!Number.isFinite(monto) || monto < 0) { toast.error('Ingresa un efectivo inicial válido.'); return; }
+    startTransition(async () => {
+      const r = await abrirCaja(monto);
+      if (r?.error) { toast.error(r.error); return; }
+      toast.success('Caja abierta. Ya puedes registrar el abono.');
+      setCajaAbierta(true);
+    });
+  }
   const { register, handleSubmit, reset, formState: { errors } } = useForm<AbonoFormValues>({
     resolver: zodResolver(abonoSchema),
     defaultValues: { monto: saldoPendiente, metodo_pago: 'efectivo' },
@@ -75,7 +92,9 @@ function RegistrarAbonoModal({
     startTransition(async () => {
       const sesion = await getSesionAbierta();
       if (!sesion) {
-        toast.error('Necesitas tener una caja abierta para registrar un abono.');
+        // La caja se cerró mientras el modal estaba abierto: volver al paso de abrirla.
+        setCajaAbierta(false);
+        toast.error('Tu caja ya no está abierta. Ábrela para registrar el abono.');
         return;
       }
       const r = await registrarAbono({
@@ -97,6 +116,26 @@ function RegistrarAbonoModal({
         <DialogHeader className="px-5 pt-5 pb-3 border-b border-border/60">
           <DialogTitle className="text-sm font-semibold">Registrar abono</DialogTitle>
         </DialogHeader>
+        {!cajaAbierta ? (
+          <div className="flex flex-col">
+            <div className="px-5 py-4 space-y-3">
+              <div className="flex items-start gap-2.5 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2.5 text-amber-800">
+                <Vault size={15} className="shrink-0 mt-0.5" />
+                <p className="text-xs leading-relaxed">
+                  Para cobrar un abono necesitas <b>abrir tu caja</b>, así el dinero se suma a tu corte del día.
+                </p>
+              </div>
+              <FormField label="Efectivo inicial en caja" type="number" step="0.01" min="0" autoFocus
+                value={saldoInicial} onChange={e => setSaldoInicial(e.target.value)} />
+            </div>
+            <div className="flex justify-end gap-2 px-5 pb-4 border-t border-border/60 pt-3">
+              <Button type="button" variant="ghost" onClick={onClose}><X size={13} /> Cancelar</Button>
+              <Button type="button" variant="default" disabled={pending} onClick={handleAbrirCaja}>
+                {pending ? 'Abriendo caja…' : 'Abrir caja y continuar'}
+              </Button>
+            </div>
+          </div>
+        ) : (
         <form onSubmit={handleSubmit(onSubmit)} className="flex flex-col">
           <div className="px-5 py-4 space-y-3">
             <p className="text-xs text-muted-foreground">
@@ -123,13 +162,18 @@ function RegistrarAbonoModal({
             </Button>
           </div>
         </form>
+        )}
       </DialogContent>
     </Dialog>
   );
 }
 
 // ─── Vista principal ──────────────────────────────────────────────────────────
-export default function VentaDetalleView({ venta }: { venta: Venta }) {
+export default function VentaDetalleView({ venta, puedeAbonar, cajaAbierta }: {
+  venta: Venta;
+  puedeAbonar: boolean;
+  cajaAbierta: boolean;
+}) {
   const router = useRouter();
   const [modalAbono, setModalAbono] = useState(false);
 
@@ -349,12 +393,16 @@ export default function VentaDetalleView({ venta }: { venta: Venta }) {
               <Wallet size={14} className="text-muted-foreground" />
               <span className="text-sm font-medium">Historial de abonos</span>
             </div>
-            {saldoPendiente > 0 && (
+            {saldoPendiente > 0 && (puedeAbonar ? (
               <Button size="sm" onClick={() => setModalAbono(true)}>
                 <Plus size={13} />
                 Registrar abono
               </Button>
-            )}
+            ) : (
+              <span className="text-xs text-muted-foreground">
+                Sin permiso para registrar abonos · pídelo al administrador
+              </span>
+            ))}
           </div>
 
           {abonos.length === 0 ? (
@@ -396,6 +444,7 @@ export default function VentaDetalleView({ venta }: { venta: Venta }) {
         onClose={() => setModalAbono(false)}
         ventaId={venta.id}
         saldoPendiente={saldoPendiente}
+        cajaAbierta={cajaAbierta}
         onRegistrado={() => { setModalAbono(false); router.refresh(); }}
       />
     </div>

@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { jwtVerify } from 'jose';
-import { MODULO_RUTA, primerModuloAccesible, type Modulo, type PermisosMap } from '@/lib/permisos';
+import { MODULO_RUTA, RUTAS_ADICIONALES, primerModuloAccesible, type Modulo, type PermisosMap } from '@/lib/permisos';
 
 const secret = new TextEncoder().encode(
   process.env.JWT_SECRET ?? 'fallback-secret-solo-para-desarrollo'
@@ -13,9 +13,12 @@ const PUBLIC_ROUTES = ['/login'];
 // total; un vendedor entra solo si tiene el permiso "ver" de ese módulo.
 // Dashboard y Configuración quedan fuera a propósito: son exclusivos de admin
 // sin importar los permisos granulares.
-const RUTA_MODULO: Record<string, Modulo> = Object.fromEntries(
-  Object.entries(MODULO_RUTA).map(([modulo, ruta]) => [ruta, modulo as Modulo])
-);
+const RUTA_MODULO: Record<string, Modulo> = {
+  ...Object.fromEntries(
+    Object.entries(MODULO_RUTA).map(([modulo, ruta]) => [ruta, modulo as Modulo])
+  ),
+  ...RUTAS_ADICIONALES,
+};
 
 export async function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl;

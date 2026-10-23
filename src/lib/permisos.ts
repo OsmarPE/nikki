@@ -47,6 +47,13 @@ export const MODULO_RUTA: Record<Modulo, string> = {
   caja:        '/caja',
 };
 
+// Rutas extra que pertenecen a un módulo pero no son su pantalla principal.
+// El middleware las autoriza con el permiso "ver" de ese módulo, igual que
+// las de MODULO_RUTA (el menú lateral ya las muestra con ese mismo permiso).
+export const RUTAS_ADICIONALES: Record<string, Modulo> = {
+  '/cuentas-por-cobrar': 'ventas',
+};
+
 interface SesionConPermisos {
   rol: 'admin' | 'vendedor';
   permisos?: PermisosMap;

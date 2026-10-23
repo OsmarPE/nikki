@@ -1,6 +1,8 @@
 import { notFound } from 'next/navigation';
 import { getVentaDetalle } from '@/actions/ventas';
 import { getSession } from '@/lib/auth';
+import { tienePermiso } from '@/lib/permisos';
+import { getSesionAbierta } from '@/actions/caja';
 import VentaDetalleView from './venta-detalle-view';
 
 interface Props {
@@ -12,9 +14,10 @@ export default async function VentaDetallePage({ params }: Props) {
   const ventaId = parseInt(id);
   if (isNaN(ventaId)) notFound();
 
-  const [venta, session] = await Promise.all([
+  const [venta, session, sesionCaja] = await Promise.all([
     getVentaDetalle(ventaId),
     getSession(),
+    getSesionAbierta(),
   ]);
 
   if (!venta) notFound();
@@ -26,5 +29,11 @@ export default async function VentaDetallePage({ params }: Props) {
     notFound();
   }
 
-  return <VentaDetalleView venta={venta} />;
+  return (
+    <VentaDetalleView
+      venta={venta}
+      puedeAbonar={tienePermiso(session, 'ventas', 'crear')}
+      cajaAbierta={sesionCaja !== null}
+    />
+  );
 }

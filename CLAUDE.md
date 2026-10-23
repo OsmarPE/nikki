@@ -71,11 +71,17 @@ logs in — permissions are not re-read per-request.
 a fixed set of modules (`productos`, `categorias`, `marcas`, `colecciones`, `inventario`, `clientes`,
 `ventas`, `caja`). Admins bypass all checks (`tienePermiso` always true). `MODULO_RUTA` maps each module to
 its admin-panel route and is the single source of truth used by both `middleware.ts` (route-level gating)
-and `primerModuloAccesible` (where to redirect a vendedor after login / on unauthorized access). Dashboard,
-Configuración, and Cuentas por Cobrar are intentionally admin-only and outside the granular permission
-system (they have no entry in `MODULO_RUTA`, so `middleware.ts` never grants a vendedor access regardless of
-`permisos`). When adding a new permissioned module/route, update `Modulo`, `MODULOS`, and `MODULO_RUTA`
-together.
+and `primerModuloAccesible` (where to redirect a vendedor after login / on unauthorized access). Secondary
+routes that belong to a module but aren't its main screen go in `RUTAS_ADICIONALES` (e.g. `/cuentas-por-cobrar`
+→ `ventas`); the middleware gates them with that module's `ver` flag. Dashboard and Configuración are
+intentionally admin-only and outside the granular permission system (no entry in either map, so
+`middleware.ts` never grants a vendedor access regardless of `permisos`). When adding a new permissioned
+module/route, update `Modulo`, `MODULOS`, and `MODULO_RUTA` together, and keep the sidebar's `modulo` in
+`components/app-sidebar.tsx` consistent with the middleware maps.
+
+**Caja vs. permiso `caja`**: selling and collecting abonos only require `ventas:crear` — the vendedor opens
+their own caja session from "Nueva venta" or from the abono modal (`abrirCaja` doesn't check the `caja`
+permission). The `caja` permission only gates the `/caja` screen (history and cortes).
 
 **Ventas a crédito / abonos** (`database/migrations/006_ventas_abonos.sql`, `src/actions/ventas.ts`): a venta
 has `tipo_venta` (`contado` | `credito`); a `credito` sale can be created with no initial payment, so
