@@ -52,6 +52,16 @@ export function formatDate(value: Date | string | null | undefined): string {
   });
 }
 
+/** "1 nov 2024" */
+export function formatDateShort(value: Date | string | null | undefined): string {
+  const d = parseMySQL(value);
+  if (isNaN(d.getTime())) return '—';
+  return d.toLocaleDateString('es-MX', {
+    day: 'numeric', month: 'short', year: 'numeric',
+    timeZone: TZ,
+  }).replace('.', '');
+}
+
 /** "viernes, 1 de noviembre de 2024" */
 export function formatDateLong(value: Date | string | null | undefined): string {
   const d = parseMySQL(value);

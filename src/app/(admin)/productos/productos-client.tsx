@@ -13,7 +13,7 @@ import { DataTable } from '@/components/ui/data-table';
 import { ConfirmDialog } from '@/components/ui/confirm-dialog';
 import { Text } from '@/components/ui/text';
 import { eliminarProducto } from '@/actions/productos';
-import { formatCurrency, formatDate } from '@/lib/utils';
+import { formatCurrency, formatDateShort } from '@/lib/utils';
 import { ProductoThumb } from '@/components/ui-custom/producto-thumb';
 import { productosFiltrosQuery, guardarRetornoProductos, type ProductosFiltros } from '@/lib/productos-filtros';
 import type { Producto, Categoria, Marca, Coleccion } from '@/types';
@@ -324,10 +324,10 @@ export default function ProductosClient({ productos, categorias, marcas, colecci
           );
         }
         return (
-          <div className="leading-tight">
-            <p className="text-sm text-muted-foreground">{formatDate(fecha)}</p>
-            <p className="font-mono text-[11px] text-muted-foreground/80">{folio ? `Nota ${folio}` : 'Sin folio'}</p>
-          </div>
+          <span className="text-sm text-muted-foreground whitespace-nowrap">
+            {formatDateShort(fecha)}
+            {folio && <span className="text-muted-foreground/80"> · Nota <span className="font-mono">{folio}</span></span>}
+          </span>
         );
       },
     },
