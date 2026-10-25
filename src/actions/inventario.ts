@@ -44,6 +44,11 @@ export async function registrarMovimientosBatch(data: {
   if (!session || !tienePermiso(session, 'inventario', 'crear')) return { error: 'Sin permiso.' };
   if (data.lineas.length === 0) return { error: 'Agrega al menos un producto.' };
   if (data.lineas.some(l => l.cantidad <= 0)) return { error: 'La cantidad debe ser mayor a 0.' };
+  // Toda compra llega con nota del proveedor: su folio es obligatorio.
+  const referencia = data.referencia?.trim() || null;
+  if (!referencia && data.lineas.some(l => l.tipo === 'entrada' && l.motivo === 'compra')) {
+    return { error: 'El folio de la nota es obligatorio en las entradas por compra.' };
+  }
 
   const conn = await pool.getConnection();
   try {
@@ -76,7 +81,7 @@ export async function registrarMovimientosBatch(data: {
         `INSERT INTO movimientos_inventario (producto_id, tipo, motivo, cantidad, usuario_id, referencia, notas)
          VALUES (?, ?, ?, ?, ?, ?, ?)`,
         [linea.producto_id, linea.tipo, linea.motivo, linea.cantidad,
-         session.sub, data.referencia ?? null, data.notas ?? null]
+         session.sub, referencia, data.notas ?? null]
       );
 
       const delta = linea.tipo === 'entrada' ? linea.cantidad : -linea.cantidad;

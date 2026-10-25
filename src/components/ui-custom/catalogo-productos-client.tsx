@@ -43,7 +43,7 @@ export default function CatalogoProductosClient({ tipo, nombre, archivada, produ
 
   // Abre la lista de Productos con este catálogo ya filtrado.
   const enProductos = `/productos${productosFiltrosQuery({
-    busqueda: '', soloSinStock: false, pagina: 0,
+    busqueda: '', soloSinStock: false, sinEntradas: false, pagina: 0,
     categorias:  tipo === 'categoria' ? [nombre] : [],
     marcas:      tipo === 'marca'     ? [nombre] : [],
     colecciones: tipo === 'coleccion' ? [nombre] : [],

@@ -16,6 +16,7 @@ import { FormField, TextareaField } from '@/components/ui/form-field';
 import { Text } from '@/components/ui/text';
 import { registrarMovimientosBatch, eliminarMovimiento, type MovimientoBatchLinea } from '@/actions/inventario';
 import { formatDateTime, cn } from '@/lib/utils';
+import { leerUltimoFolio, guardarUltimoFolio } from '@/lib/ultimo-folio';
 import { movimientosBatchSchema } from '@/lib/validations';
 import type { MovimientoInventario, Producto } from '@/types';
 
@@ -215,6 +216,9 @@ function MovimientosBatchForm({
   const [referencia, setReferencia] = useState('');
   const [notas, setNotas] = useState('');
   const [error, setError] = useState<string | null>(null);
+  // Toda compra llega con nota del proveedor: si el lote tiene entradas por compra, el folio es obligatorio.
+  const requiereFolio = lineas.some(l => l.tipo === 'entrada' && l.motivo === 'compra');
+  const [ultimoFolio] = useState(leerUltimoFolio);
 
   function agregarProducto(p: Producto) {
     setError(null);
@@ -252,6 +256,10 @@ function MovimientosBatchForm({
       referencia: referencia || undefined,
       notas: notas || undefined,
     };
+    if (requiereFolio && !referencia.trim()) {
+      setError('El folio de la nota es obligatorio en las entradas por compra.');
+      return;
+    }
     const parsed = movimientosBatchSchema.safeParse(payload);
     if (!parsed.success) {
       setError(parsed.error.issues[0]?.message ?? 'Revisa los datos del lote.');
@@ -324,14 +332,25 @@ function MovimientosBatchForm({
             </div>
 
             <div className="grid grid-cols-2 gap-4">
-              <FormField
-                label="Referencia"
-                hint="opcional, aplica a todo el lote"
-                placeholder="Ej. folio de compra"
-                value={referencia}
-                onChange={e => setReferencia(e.target.value)}
-                className="h-9"
-              />
+              <div className="space-y-1">
+                <FormField
+                  label={requiereFolio ? 'Folio de la nota' : 'Referencia'}
+                  hint={requiereFolio ? 'obligatorio, aplica a todo el lote' : 'opcional, aplica a todo el lote'}
+                  placeholder="Ej. 7316"
+                  value={referencia}
+                  onChange={e => setReferencia(e.target.value)}
+                  className="h-9 font-mono"
+                />
+                {requiereFolio && ultimoFolio && referencia.trim() !== ultimoFolio && (
+                  <button
+                    type="button"
+                    onClick={() => setReferencia(ultimoFolio)}
+                    className="text-[11px] text-muted-foreground hover:text-foreground underline-offset-2 hover:underline"
+                  >
+                    Usar el último: <span className="font-mono">{ultimoFolio}</span>
+                  </button>
+                )}
+              </div>
               <TextareaField
                 label="Notas"
                 hint="opcional, aplica a todo el lote"
@@ -385,6 +404,7 @@ export default function InventarioClient({
     startTransition(async () => {
       const r = await registrarMovimientosBatch(data);
       if (r?.error) { toast.error(r.error); return; }
+      if (data.referencia) guardarUltimoFolio(data.referencia);
       toast.success(
         data.lineas.length === 1
           ? 'Movimiento registrado.'

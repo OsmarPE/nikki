@@ -7,6 +7,8 @@ export interface ProductosFiltros {
   categorias: string[];
   colecciones: string[];
   soloSinStock: boolean;
+  /** Solo productos que nunca han tenido una entrada de inventario. */
+  sinEntradas: boolean;
   /** 0-based (en la URL se guarda 1-based como `pagina`). */
   pagina: number;
 }
@@ -27,6 +29,7 @@ export function parseProductosFiltros(sp: RawSearchParams): ProductosFiltros {
     categorias:   lista(sp.categoria),
     colecciones:  lista(sp.coleccion),
     soloSinStock: sp.sinstock === '1',
+    sinEntradas:  sp.sinentradas === '1',
     pagina:       Number.isFinite(pag) && pag > 1 ? pag - 1 : 0,
   };
 }
@@ -38,6 +41,7 @@ export function productosFiltrosQuery(f: ProductosFiltros): string {
   f.categorias.forEach(v => p.append('categoria', v));
   f.colecciones.forEach(v => p.append('coleccion', v));
   if (f.soloSinStock) p.set('sinstock', '1');
+  if (f.sinEntradas) p.set('sinentradas', '1');
   if (f.pagina > 0) p.set('pagina', String(f.pagina + 1));
   const s = p.toString();
   return s ? `?${s}` : '';

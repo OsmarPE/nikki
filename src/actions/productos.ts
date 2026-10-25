@@ -18,11 +18,18 @@ export async function getProductos(): Promise<Producto[]> {
       p.*,
       c.nombre   AS categoria_nombre,
       m.nombre   AS marca_nombre,
-      col.nombre AS coleccion_nombre
+      col.nombre AS coleccion_nombre,
+      ue.creado_at  AS ultima_entrada_at,
+      ue.referencia AS ultima_entrada_referencia
     FROM productos p
     LEFT JOIN categorias  c   ON c.id   = p.categoria_id
     LEFT JOIN marcas       m   ON m.id   = p.marca_id
     LEFT JOIN colecciones  col ON col.id = p.coleccion_id
+    -- Última entrada de inventario de cada producto (el id más alto es la más reciente).
+    LEFT JOIN movimientos_inventario ue ON ue.id = (
+      SELECT MAX(mi.id) FROM movimientos_inventario mi
+      WHERE mi.producto_id = p.id AND mi.tipo = 'entrada'
+    )
     WHERE p.activo = 1
     ORDER BY p.nombre ASC
   `);
@@ -66,28 +73,58 @@ export async function listarProductosPOS(
   return { items, total };
 }
 
+// `entradaInicial`: piezas que llegaron con el producto y el folio de su nota.
+// Se registran en la misma transacción que el alta, así un producto nuevo no
+// queda en 0 piezas porque se olvidó el paso de Inventario.
 export async function crearProducto(data: {
   sku: string; nombre: string; precio: number;
   precio_descuento?: number | null; descripcion?: string;
   imagen_url?: string | null; categoria_id?: number | null;
   marca_id?: number | null; coleccion_id?: number | null;
-}) {
+}, entradaInicial?: { cantidad: number; referencia: string } | null) {
   const session = await getSession();
-  if (!tienePermiso(session, 'productos', 'crear')) return { error: 'Sin permiso.' };
+  if (!session || !tienePermiso(session, 'productos', 'crear')) return { error: 'Sin permiso.' };
+
+  const folio = entradaInicial?.referencia.trim() ?? '';
+  if (entradaInicial) {
+    if (!tienePermiso(session, 'inventario', 'crear')) return { error: 'Sin permiso para registrar piezas.' };
+    if (!Number.isInteger(entradaInicial.cantidad) || entradaInicial.cantidad <= 0) {
+      return { error: 'Las piezas deben ser un número entero mayor a 0.' };
+    }
+    if (!folio) return { error: 'El folio de la nota es obligatorio.' };
+    if (folio.length > 100) return { error: 'El folio de la nota es demasiado largo.' };
+  }
+
+  const conn = await pool.getConnection();
   try {
-    await pool.query<ResultSetHeader>(
+    await conn.beginTransaction();
+    const [result] = await conn.query<ResultSetHeader>(
       `INSERT INTO productos (sku, nombre, precio, precio_descuento, descripcion, imagen_url, categoria_id, marca_id, coleccion_id)
        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       [data.sku, data.nombre, data.precio, data.precio_descuento ?? null,
        data.descripcion ?? null, data.imagen_url ?? null,
        data.categoria_id ?? null, data.marca_id ?? null, data.coleccion_id ?? null]
     );
+    if (entradaInicial) {
+      await conn.query(
+        `INSERT INTO movimientos_inventario (producto_id, tipo, motivo, cantidad, usuario_id, referencia)
+         VALUES (?, 'entrada', 'compra', ?, ?, ?)`,
+        [result.insertId, entradaInicial.cantidad, session.sub, folio]
+      );
+      await conn.query(`UPDATE productos SET stock = stock + ? WHERE id = ?`, [entradaInicial.cantidad, result.insertId]);
+    }
+    await conn.commit();
     revalidatePath('/productos');
+    if (entradaInicial) revalidatePath('/inventario');
     return { success: true };
   } catch (e: unknown) {
+    await conn.rollback();
     const err = e as { code?: string };
     if (err.code === 'ER_DUP_ENTRY') return { error: 'El SKU ya existe.' };
+    console.error(e);
     return { error: 'Error al crear producto.' };
+  } finally {
+    conn.release();
   }
 }
 

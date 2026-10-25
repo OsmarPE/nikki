@@ -37,6 +37,7 @@ export default async function ProductoPage({ params }: Props) {
       categorias={categorias}
       marcas={marcas}
       colecciones={colecciones}
+      puedeRegistrarPiezas={tienePermiso(session, 'inventario', 'crear')}
     />
   );
 }

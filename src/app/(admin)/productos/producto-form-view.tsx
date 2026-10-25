@@ -7,7 +7,7 @@ import { toast } from 'sonner';
 import { useRouter } from 'next/navigation';
 import {
   ArrowLeft, Save, Trash2, Package,
-  Tag, Layers, Award, DollarSign, FileText, Image,
+  Tag, Layers, Award, DollarSign, FileText, Image, PackagePlus, Plus, X,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { ConfirmDialog } from '@/components/ui/confirm-dialog';
@@ -16,7 +16,11 @@ import { Badge } from '@/components/ui/badge';
 import { Separator } from '@/components/ui/separator';
 import { FormField, TextareaField, FieldGroup } from '@/components/ui/form-field';
 import { ImageUpload } from '@/components/ui/image-upload';
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { PiezasFolioFields, validarPiezasFolio } from '@/components/ui-custom/piezas-folio-fields';
 import { crearProducto, actualizarProducto, eliminarProducto } from '@/actions/productos';
+import { registrarMovimientosBatch } from '@/actions/inventario';
+import { guardarUltimoFolio } from '@/lib/ultimo-folio';
 import { cn, formatCurrency, formatDate } from '@/lib/utils';
 import { urlRetornoProductos } from '@/lib/productos-filtros';
 import { zodResolver, productoSchema, type ProductoFormValues } from '@/lib/validations';
@@ -29,6 +33,8 @@ interface Props {
   marcas: Marca[];
   colecciones: Coleccion[];
   modo: 'crear' | 'editar';
+  /** Permiso inventario:crear — habilita registrar piezas desde aquí. */
+  puedeRegistrarPiezas: boolean;
 }
 
 const MOTIVO_LABELS: Record<string, string> = {
@@ -62,13 +68,77 @@ function Section({
   );
 }
 
+// ─── Modal — agregar piezas a un producto existente ───────────────────────────
+function AgregarPiezasModal({
+  open, onClose, productoId, onRegistrado,
+}: {
+  open: boolean;
+  onClose: () => void;
+  productoId: number;
+  onRegistrado: () => void;
+}) {
+  const [pending, startTransition] = useTransition();
+  const [piezas, setPiezas] = useState('');
+  const [folio, setFolio] = useState('');
+  const [errores, setErrores] = useState<{ piezas?: string; folio?: string }>({});
+
+  function handleGuardar() {
+    const v = validarPiezasFolio(piezas, folio, { permitirCero: false });
+    setErrores(v.errores);
+    if (v.errores.piezas || v.errores.folio) return;
+    startTransition(async () => {
+      const r = await registrarMovimientosBatch({
+        lineas: [{ producto_id: productoId, tipo: 'entrada', motivo: 'compra', cantidad: v.cantidad }],
+        referencia: v.folio,
+      });
+      if (r?.error) { toast.error(r.error); return; }
+      guardarUltimoFolio(v.folio);
+      toast.success(`${v.cantidad} ${v.cantidad === 1 ? 'pieza agregada' : 'piezas agregadas'}.`);
+      setPiezas(''); setFolio('');
+      onRegistrado();
+    });
+  }
+
+  return (
+    <Dialog open={open} onOpenChange={o => !o && onClose()}>
+      <DialogContent className="max-w-sm p-0 gap-0 overflow-hidden">
+        <DialogHeader className="px-5 pt-5 pb-3 border-b border-border/60">
+          <DialogTitle className="text-sm font-semibold">Agregar piezas</DialogTitle>
+        </DialogHeader>
+        <div className="px-5 py-4">
+          <PiezasFolioFields
+            autoFocus
+            piezas={piezas} onPiezasChange={setPiezas}
+            folio={folio} onFolioChange={setFolio}
+            errorPiezas={errores.piezas} errorFolio={errores.folio}
+          />
+        </div>
+        <div className="flex justify-end gap-2 px-5 pb-4 border-t border-border/60 pt-3">
+          <Button type="button" variant="ghost" onClick={onClose}><X size={13} /> Cancelar</Button>
+          <Button type="button" variant="default" disabled={pending} onClick={handleGuardar}>
+            {pending ? 'Guardando…' : 'Agregar piezas'}
+          </Button>
+        </div>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
 // ─── Vista principal ──────────────────────────────────────────────────────────
 export default function ProductoFormView({
-  producto, movimientos = [], categorias, marcas, colecciones, modo,
+  producto, movimientos = [], categorias, marcas, colecciones, modo, puedeRegistrarPiezas,
 }: Props) {
   const router = useRouter();
   const [pending, startTransition] = useTransition();
   const [confirmEliminar, setConfirmEliminar] = useState(false);
+  const [modalPiezas, setModalPiezas] = useState(false);
+
+  // Piezas iniciales (solo al crear): se registran junto con el alta.
+  const [piezas, setPiezas] = useState('');
+  const [folio, setFolio] = useState('');
+  const [erroresPiezas, setErroresPiezas] = useState<{ piezas?: string; folio?: string }>({});
+  // Datos del formulario en espera de confirmar "guardar sin piezas".
+  const [sinPiezasPendiente, setSinPiezasPendiente] = useState<ProductoFormValues | null>(null);
 
   const { register, handleSubmit, control, setValue, watch, formState: { errors, isDirty } } = useForm<ProductoFormValues>({
     resolver: zodResolver(productoSchema),
@@ -92,6 +162,18 @@ export default function ProductoFormView({
   const stock = Number(producto?.stock ?? 0);
 
   function onSubmit(data: ProductoFormValues) {
+    if (modo === 'crear' && puedeRegistrarPiezas) {
+      const v = validarPiezasFolio(piezas, folio, { permitirCero: true });
+      setErroresPiezas(v.errores);
+      if (v.errores.piezas || v.errores.folio) return;
+      if (v.cantidad === 0) { setSinPiezasPendiente(data); return; }
+      guardar(data, { cantidad: v.cantidad, referencia: v.folio });
+      return;
+    }
+    guardar(data, null);
+  }
+
+  function guardar(data: ProductoFormValues, entradaInicial: { cantidad: number; referencia: string } | null) {
     startTransition(async () => {
       const payload = {
         sku:              data.sku,
@@ -106,10 +188,11 @@ export default function ProductoFormView({
       };
 
       const r = modo === 'crear'
-        ? await crearProducto(payload)
+        ? await crearProducto(payload, entradaInicial)
         : await actualizarProducto(producto!.id, payload);
 
       if (r?.error) { toast.error(r.error); return; }
+      if (entradaInicial) guardarUltimoFolio(entradaInicial.referencia);
       toast.success(modo === 'crear' ? 'Producto creado.' : 'Cambios guardados.');
       router.push(urlRetornoProductos());
       router.refresh();
@@ -341,6 +424,21 @@ export default function ProductoFormView({
           </div>
         </Section>
 
+        {/* Piezas iniciales (solo alta): evita productos nuevos en 0 por olvidar Inventario */}
+        {modo === 'crear' && puedeRegistrarPiezas && (
+          <Section
+            icon={PackagePlus}
+            title="Piezas iniciales"
+            description="Piezas que llegaron de este producto y el folio de la nota del proveedor. Se registran en Inventario al guardar."
+          >
+            <PiezasFolioFields
+              piezas={piezas} onPiezasChange={v => { setPiezas(v); setErroresPiezas({}); }}
+              folio={folio} onFolioChange={v => { setFolio(v); setErroresPiezas({}); }}
+              errorPiezas={erroresPiezas.piezas} errorFolio={erroresPiezas.folio}
+            />
+          </Section>
+        )}
+
         {/* Historial de movimientos (solo edición) */}
         {modo === 'editar' && (
           <Section
@@ -348,6 +446,13 @@ export default function ProductoFormView({
             title="Historial de inventario"
             description="Últimos movimientos registrados para este producto."
           >
+            {puedeRegistrarPiezas && (
+              <div className="flex justify-end mb-3">
+                <Button type="button" size="sm" variant="outline" onClick={() => setModalPiezas(true)}>
+                  <Plus size={13} /> Agregar piezas
+                </Button>
+              </div>
+            )}
             {movimientos.length === 0 ? (
               <div className="flex flex-col items-center justify-center py-8 text-center">
                 <Package size={28} className="text-muted-foreground/40 mb-2" />
@@ -411,6 +516,25 @@ export default function ProductoFormView({
           </Section>
         )}
       </div>
+
+      {modo === 'editar' && producto && (
+        <AgregarPiezasModal
+          open={modalPiezas}
+          onClose={() => setModalPiezas(false)}
+          productoId={producto.id}
+          onRegistrado={() => { setModalPiezas(false); router.refresh(); }}
+        />
+      )}
+
+      <ConfirmDialog
+        open={sinPiezasPendiente !== null}
+        onOpenChange={o => { if (!o) setSinPiezasPendiente(null); }}
+        title="¿Guardar sin piezas?"
+        description="El producto quedará con 0 piezas y aparecerá como «Sin entradas» hasta que se le registren."
+        confirmLabel="Sí, guardar en 0"
+        onConfirm={() => { const d = sinPiezasPendiente; setSinPiezasPendiente(null); if (d) guardar(d, null); }}
+        pending={pending}
+      />
 
       <ConfirmDialog
         open={confirmEliminar}

@@ -4,7 +4,7 @@ import { useState, useTransition, useMemo, useCallback, useRef, useEffect } from
 import { useRouter } from 'next/navigation';
 import { toast } from 'sonner';
 import { ColumnDef } from '@tanstack/react-table';
-import { MoreHorizontalIcon, PencilIcon, Trash2Icon, X, SlidersHorizontal, ChevronDown, Plus, FileDown, AlertTriangle, CircleAlert } from 'lucide-react';
+import { MoreHorizontalIcon, PencilIcon, Trash2Icon, X, SlidersHorizontal, ChevronDown, Plus, FileDown, AlertTriangle, CircleAlert, PackageX } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
@@ -13,7 +13,7 @@ import { DataTable } from '@/components/ui/data-table';
 import { ConfirmDialog } from '@/components/ui/confirm-dialog';
 import { Text } from '@/components/ui/text';
 import { eliminarProducto } from '@/actions/productos';
-import { formatCurrency } from '@/lib/utils';
+import { formatCurrency, formatDate } from '@/lib/utils';
 import { ProductoThumb } from '@/components/ui-custom/producto-thumb';
 import { productosFiltrosQuery, guardarRetornoProductos, type ProductosFiltros } from '@/lib/productos-filtros';
 import type { Producto, Categoria, Marca, Coleccion } from '@/types';
@@ -178,6 +178,7 @@ export default function ProductosClient({ productos, categorias, marcas, colecci
   const [categoriasFiltro, setCategoriasState] = useState<Set<string>>(() => new Set(filtrosIniciales.categorias));
   const [coleccionesFiltro, setColeccionesState] = useState<Set<string>>(() => new Set(filtrosIniciales.colecciones));
   const [soloSinStock, setSoloSinStockState] = useState(filtrosIniciales.soloSinStock);
+  const [sinEntradas, setSinEntradasState] = useState(filtrosIniciales.sinEntradas);
   const [pagina, setPagina] = useState(filtrosIniciales.pagina);
 
   // Cualquier cambio de filtro regresa a la primera página.
@@ -186,6 +187,7 @@ export default function ProductosClient({ productos, categorias, marcas, colecci
   const setCategoriasFiltro  = (v: Set<string>) => { setCategoriasState(v);  setPagina(0); };
   const setColeccionesFiltro = (v: Set<string>) => { setColeccionesState(v); setPagina(0); };
   const setSoloSinStock      = (v: boolean)     => { setSoloSinStockState(v); setPagina(0); };
+  const setSinEntradas       = (v: boolean)     => { setSinEntradasState(v); setPagina(0); };
   const [, startTransition] = useTransition();
   const [exportando, setExportando] = useState(false);
   async function handleExport() {
@@ -209,7 +211,12 @@ export default function ProductosClient({ productos, categorias, marcas, colecci
   const [confirmTarget, setConfirmTarget] = useState<{ id: number; nombre: string } | null>(null);
 
   const totalFiltrosActivos = marcasFiltro.size + categoriasFiltro.size + coleccionesFiltro.size;
-  const hayFiltros = busqueda || totalFiltrosActivos > 0 || soloSinStock;
+  const hayFiltros = busqueda || totalFiltrosActivos > 0 || soloSinStock || sinEntradas;
+
+  // Productos que nunca recibieron piezas (p. ej. se dieron de alta y se olvidó registrar la entrada).
+  const sinEntradasCount = useMemo(() =>
+    productos.filter(p => !p.ultima_entrada_at).length,
+  [productos]);
 
   const sinStockCount = useMemo(() =>
     productos.filter(p => Number(p.stock ?? 0) <= 0).length,
@@ -223,8 +230,9 @@ export default function ProductosClient({ productos, categorias, marcas, colecci
     const matchCategoria = categoriasFiltro.size === 0 || (p.categoria_nombre  != null && categoriasFiltro.has(p.categoria_nombre));
     const matchColeccion = coleccionesFiltro.size === 0|| (p.coleccion_nombre  != null && coleccionesFiltro.has(p.coleccion_nombre));
     const matchStock      = !soloSinStock || Number(p.stock ?? 0) <= 0;
-    return matchBusqueda && matchMarca && matchCategoria && matchColeccion && matchStock;
-  }), [productos, busqueda, marcasFiltro, categoriasFiltro, coleccionesFiltro, soloSinStock]);
+    const matchEntradas   = !sinEntradas || !p.ultima_entrada_at;
+    return matchBusqueda && matchMarca && matchCategoria && matchColeccion && matchStock && matchEntradas;
+  }), [productos, busqueda, marcasFiltro, categoriasFiltro, coleccionesFiltro, soloSinStock, sinEntradas]);
 
   // Si la página guardada ya no existe (p. ej. se eliminaron productos), se ajusta a la última.
   const paginaVisible = Math.min(pagina, Math.max(0, Math.ceil(filtrados.length / PAGE_SIZE) - 1));
@@ -236,11 +244,12 @@ export default function ProductosClient({ productos, categorias, marcas, colecci
       categorias:  [...categoriasFiltro],
       colecciones: [...coleccionesFiltro],
       soloSinStock,
+      sinEntradas,
       pagina:      paginaVisible,
     });
     window.history.replaceState(null, '', `/productos${query}`);
     guardarRetornoProductos(query);
-  }, [busqueda, marcasFiltro, categoriasFiltro, coleccionesFiltro, soloSinStock, paginaVisible]);
+  }, [busqueda, marcasFiltro, categoriasFiltro, coleccionesFiltro, soloSinStock, sinEntradas, paginaVisible]);
 
   function pedirEliminar(id: number, nombre: string) {
     setConfirmTarget({ id, nombre });
@@ -301,6 +310,26 @@ export default function ProductosClient({ productos, categorias, marcas, colecci
     {
       accessorKey: 'marca_nombre', header: 'Marca',
       cell: ({ row }) => <span className="text-sm text-muted-foreground">{row.original.marca_nombre ?? '—'}</span>,
+    },
+    {
+      // Fecha y folio de la nota de la última entrada de piezas.
+      accessorKey: 'ultima_entrada_at', header: 'Última entrada',
+      cell: ({ row }) => {
+        const { ultima_entrada_at: fecha, ultima_entrada_referencia: folio } = row.original;
+        if (!fecha) {
+          return (
+            <Badge variant="outline" className="font-normal text-xs bg-amber-50 text-amber-700 border-amber-200">
+              Sin entradas
+            </Badge>
+          );
+        }
+        return (
+          <div className="leading-tight">
+            <p className="text-sm text-muted-foreground">{formatDate(fecha)}</p>
+            <p className="font-mono text-[11px] text-muted-foreground/80">{folio ? `Nota ${folio}` : 'Sin folio'}</p>
+          </div>
+        );
+      },
     },
     ...(permisos.editar || permisos.eliminar ? [{
       id: 'actions', header: '',
@@ -410,9 +439,25 @@ export default function ProductosClient({ productos, categorias, marcas, colecci
           </button>
         )}
 
+        {sinEntradasCount > 0 && (
+          <button
+            type="button"
+            onClick={() => setSinEntradas(!sinEntradas)}
+            className={[
+              'inline-flex items-center gap-1.5 h-8 rounded-md border px-2.5 text-sm transition-colors',
+              sinEntradas
+                ? 'border-amber-300 bg-amber-50 text-amber-800 font-medium'
+                : 'border-amber-200 text-amber-700 hover:bg-amber-50',
+            ].join(' ')}
+          >
+            <PackageX size={13} />
+            {sinEntradasCount} sin entradas
+          </button>
+        )}
+
         {hayFiltros && (
           <Button variant="outline" size="sm"
-            onClick={() => { setBusqueda(''); setMarcasFiltro(new Set()); setCategoriasFiltro(new Set()); setColeccionesFiltro(new Set()); setSoloSinStock(false); }}
+            onClick={() => { setBusqueda(''); setMarcasFiltro(new Set()); setCategoriasFiltro(new Set()); setColeccionesFiltro(new Set()); setSoloSinStock(false); setSinEntradas(false); }}
             className="h-8 px-2 gap-1.5">
             <X size={13} /> Limpiar
           </Button>

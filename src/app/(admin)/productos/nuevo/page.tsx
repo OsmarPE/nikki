@@ -20,6 +20,7 @@ export default async function NuevoProductoPage() {
       categorias={categorias}
       marcas={marcas}
       colecciones={colecciones}
+      puedeRegistrarPiezas={tienePermiso(session, 'inventario', 'crear')}
     />
   );
 }

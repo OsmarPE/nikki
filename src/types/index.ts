@@ -52,6 +52,9 @@ export interface Producto {
   marca_nombre?: string;
   coleccion_nombre?: string;
   stock?: number;
+  /** Última entrada de inventario (solo en getProductos); null si nunca tuvo. */
+  ultima_entrada_at?: string | null;
+  ultima_entrada_referencia?: string | null;
 }
 
 export interface MovimientoInventario {
