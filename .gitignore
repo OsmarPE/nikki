@@ -39,3 +39,7 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+# imágenes subidas: viven fuera del repo (ver src/lib/uploads.ts)
+/storage/
+/public/uploads/

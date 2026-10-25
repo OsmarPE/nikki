@@ -1,12 +1,15 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getSession } from '@/lib/auth';
 import { writeFile, mkdir } from 'fs/promises';
-import { join, extname } from 'path';
+import { join } from 'path';
 import { randomBytes } from 'crypto';
+import { UPLOAD_DIR, UPLOAD_URL_PREFIX } from '@/lib/uploads';
 
 const ALLOWED_TYPES = ['image/jpeg', 'image/png', 'image/webp', 'image/gif'];
+const EXT_POR_TIPO: Record<string, string> = {
+  'image/jpeg': '.jpg', 'image/png': '.png', 'image/webp': '.webp', 'image/gif': '.gif',
+};
 const MAX_SIZE_BYTES = 4 * 1024 * 1024; // 4 MB
-const UPLOAD_DIR = join(process.cwd(), 'public', 'uploads');
 
 export async function POST(request: NextRequest) {
   // Auth
@@ -26,7 +29,8 @@ export async function POST(request: NextRequest) {
   }
 
   // Nombre único para evitar colisiones
-  const ext = extname(file.name).toLowerCase() || '.jpg';
+  // Extensión según el tipo real (no el nombre original), para que coincida con lo que sirve /uploads.
+  const ext = EXT_POR_TIPO[file.type];
   const filename = `${randomBytes(12).toString('hex')}${ext}`;
   const filepath = join(UPLOAD_DIR, filename);
 
@@ -36,6 +40,6 @@ export async function POST(request: NextRequest) {
   const buffer = Buffer.from(await file.arrayBuffer());
   await writeFile(filepath, buffer);
 
-  const url = `/uploads/${filename}`;
+  const url = `${UPLOAD_URL_PREFIX}${filename}`;
   return NextResponse.json({ url }, { status: 200 });
 }
