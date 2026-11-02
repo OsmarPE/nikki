@@ -21,6 +21,7 @@ import { Dialog as DialogPrimitive } from '@base-ui/react/dialog';
 import { FormField } from '@/components/ui/form-field';
 import { PaginationControls } from '@/components/ui/pagination-controls';
 import { cn } from '@/lib/utils';
+import { tienePunteroFino } from '@/lib/dispositivo';
 import { formatCurrency } from '@/lib/utils';
 import { calcularCarrito, calcularCandidatosDescuento } from '@/lib/promocion';
 import { procesarVenta } from '@/actions/ventas';
@@ -393,7 +394,7 @@ function PasoCliente({
           <div className="relative">
             <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
             <Input
-              autoFocus
+              autoFocus={tienePunteroFino()}
               placeholder="Buscar por nombre o teléfono…"
               value={query}
               onChange={e => onQueryChange(e.target.value)}
@@ -408,7 +409,7 @@ function PasoCliente({
                 {clientes.length === 0 ? 'Aún no hay clientes registrados' : `Sin resultados para "${query}"`}
               </div>
             ) : (
-              <div className="divide-y divide-border/50 max-h-52 overflow-y-auto">
+              <div className="divide-y divide-border/50 max-h-52 overflow-y-auto overscroll-contain">
                 {resultados.map(c => (
                   <button key={c.id} onClick={() => onSeleccionar(c)}
                     className="w-full flex items-center gap-3 px-4 py-3 text-left hover:bg-muted/50 transition-colors">
@@ -1049,7 +1050,7 @@ function BuscadorProductos({
         <DialogPrimitive.Popup
           className={cn(
             'fixed top-1/2 left-1/2 z-50 -translate-x-1/2 -translate-y-1/2',
-            'w-[96vw] max-w-[1000px] max-h-[85vh]',
+            'w-[96vw] max-w-[1000px] max-h-[85dvh]',
             'flex flex-col overflow-hidden rounded-2xl bg-popover text-popover-foreground shadow-2xl ring-1 ring-foreground/10 outline-none',
             'duration-100 data-open:animate-in data-open:fade-in-0 data-open:zoom-in-95 data-closed:animate-out data-closed:fade-out-0 data-closed:zoom-out-95',
           )}
@@ -1064,7 +1065,7 @@ function BuscadorProductos({
               <div className="relative mt-3 max-w-md">
                 <Search size={16} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-muted-foreground" />
                 <Input
-                  autoFocus
+                  autoFocus={tienePunteroFino()}
                   placeholder="Nombre o SKU del producto…"
                   value={query}
                   onChange={e => handleQuery(e.target.value)}
@@ -1081,7 +1082,7 @@ function BuscadorProductos({
           </div>
 
           {/* Resultados */}
-          <div className="flex-1 overflow-y-auto px-6 py-5 bg-muted/10">
+          <div className="flex-1 min-h-0 overflow-y-auto overscroll-contain px-6 py-5 bg-muted/10">
             {buscando ? (
               <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 xl:grid-cols-5 gap-4">
                 {Array.from({ length: 8 }).map((_, i) => (

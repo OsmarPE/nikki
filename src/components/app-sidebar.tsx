@@ -30,6 +30,7 @@ import {
   SidebarMenuButton,
   SidebarMenuItem,
   SidebarRail,
+  useSidebar,
 } from '@/components/ui/sidebar';
 import { logoutAction } from '@/actions/auth';
 import { tieneAccesoModulo, type Modulo, type PermisosMap } from '@/lib/permisos';
@@ -59,6 +60,8 @@ interface AppSidebarProps {
 
 export function AppSidebar({ nombre, rol, permisos }: AppSidebarProps) {
   const pathname = usePathname();
+  // En tablet/celular el menú es un panel desplegable: se cierra al elegir una opción.
+  const { setOpenMobile } = useSidebar();
   const sesion = { rol, permisos };
 
   const navVisible = NAV.filter(item =>
@@ -105,7 +108,7 @@ export function AppSidebar({ nombre, rol, permisos }: AppSidebarProps) {
                     isActive={href === activeHref}
                     tooltip={label}
                   >
-                    <Link href={href} className="flex items-center gap-2 text-sm flex-1">
+                    <Link href={href} onClick={() => setOpenMobile(false)} className="flex items-center gap-2 text-sm flex-1">
                       <Icon width="14" height="14" />
                       <span>{label}</span>
                     </Link>

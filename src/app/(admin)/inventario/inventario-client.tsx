@@ -16,6 +16,7 @@ import { FormField, TextareaField } from '@/components/ui/form-field';
 import { Text } from '@/components/ui/text';
 import { registrarMovimientosBatch, eliminarMovimiento, type MovimientoBatchLinea } from '@/actions/inventario';
 import { formatDateTime, cn } from '@/lib/utils';
+import { tienePunteroFino } from '@/lib/dispositivo';
 import { leerUltimoFolio, guardarUltimoFolio } from '@/lib/ultimo-folio';
 import { movimientosBatchSchema } from '@/lib/validations';
 import type { MovimientoInventario, Producto } from '@/types';
@@ -88,7 +89,7 @@ function BuscadorProductoLote({
       <div className="relative">
         <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
         <Input
-          autoFocus
+          autoFocus={tienePunteroFino()}
           placeholder="Buscar por nombre o SKU para agregar al lote…"
           value={query}
           onChange={e => setQuery(e.target.value)}
@@ -100,7 +101,7 @@ function BuscadorProductoLote({
           Sin resultados para &quot;{query}&quot;
         </div>
       ) : (
-        <div className="grid grid-cols-2 gap-2 max-h-40 overflow-y-auto pr-0.5">
+        <div className="grid grid-cols-2 gap-2 max-h-40 overflow-y-auto overscroll-contain pr-0.5">
           {filtrados.map(p => (
             <ProductoCard
               key={p.id}
@@ -495,7 +496,7 @@ export default function InventarioClient({
           <DialogPrimitive.Popup
             className={cn(
               'fixed top-1/2 left-1/2 z-50 -translate-x-1/2 -translate-y-1/2',
-              'w-[92vw] max-w-250 max-h-[88vh]',
+              'w-[92vw] max-w-250 max-h-[88dvh]',
               'flex flex-col overflow-hidden rounded-2xl bg-popover text-popover-foreground shadow-2xl ring-1 ring-foreground/10 outline-none',
               'duration-100 data-open:animate-in data-open:fade-in-0 data-open:zoom-in-95 data-closed:animate-out data-closed:fade-out-0 data-closed:zoom-out-95',
             )}
@@ -518,7 +519,7 @@ export default function InventarioClient({
             </div>
 
             {modal && (
-              <div className="overflow-y-auto">
+              <div className="min-h-0 overflow-y-auto overscroll-contain">
                 <MovimientosBatchForm
                   key={String(modal)}
                   productos={productos}

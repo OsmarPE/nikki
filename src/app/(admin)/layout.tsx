@@ -16,7 +16,9 @@ export default async function AdminLayout({ children }: { children: React.ReactN
   return (
     <SidebarProvider>
       <AppSidebar nombre={session.nombre} rol={session.rol} permisos={session.permisos} />
-      <SidebarInset>
+      {/* min-w-0: sin esto el área de contenido crece al ancho de la tabla más ancha y en
+          tablet toda la página se desplaza de lado; así solo la tabla hace scroll horizontal. */}
+      <SidebarInset className="min-w-0">
         <header className="flex h-12 shrink-0 items-center gap-2 border-b px-4">
           <SidebarTrigger className="-ml-1" />
           <Separator orientation="vertical" className="mr-2 h-4" />
