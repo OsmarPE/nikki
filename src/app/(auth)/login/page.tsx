@@ -1,72 +1,77 @@
-'use client';
+/* eslint-disable @next/next/no-img-element -- recursos decorativos estáticos del diseño (Figma "nikki" › login) */
+import { Lora } from 'next/font/google';
+import LoginForm from './login-form';
 
-import { useActionState, useState } from 'react';
-import { loginAction } from '@/actions/auth';
-import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
-import { Text } from '@/components/ui/text';
-import { Lock, Eye, EyeOff } from 'lucide-react';
+const lora = Lora({ subsets: ['latin'], weight: ['600', '700'] });
 
-const initialState = { error: '' };
+// Colores de la marca Nikky (diseño de Figma).
+// Panel: #855c80 · Botón: #92678e (ver login-form.tsx).
+
+// Logo "NB": el PNG trae margen alrededor; se recorta igual que en el diseño.
+function Logo() {
+  return (
+    <div className="flex items-center gap-[22px]">
+      <div className="relative h-[50px] w-[54px] overflow-hidden">
+        <img
+          src="/login/logo-nb.png"
+          alt="Nikky"
+          className="absolute max-w-none h-[254.42%] w-[237.24%] left-[-69.48%] top-[-63.03%]"
+        />
+      </div>
+      <span className="text-xs font-medium tracking-[2.4px] text-[#855c80]">NIKKY</span>
+    </div>
+  );
+}
+
+// Panel morado decorativo (solo en pantallas ≥ lg). Posiciones en % del panel
+// (608×758 en el diseño) para que escale con la pantalla.
+function PanelMarca() {
+  return (
+    <aside aria-hidden className="relative hidden lg:block overflow-hidden bg-[#855c80]">
+      <img src="/login/espiral.svg" alt="" width={38} height={45} className="absolute left-[10.4%] top-[9.1%]" />
+      <img src="/login/punto-chico.svg" alt="" width={5} height={5} className="absolute left-[58.4%] top-[10.7%]" />
+      <img src="/login/icono-bolsa.svg" alt="" width={24} height={24} className="absolute left-[75%] top-[15%]" />
+      <img src="/login/icono-bolsa.svg" alt="" width={24} height={24} className="absolute left-[39.6%] top-[41.6%]" />
+      <img src="/login/punto-grande.svg" alt="" width={10} height={10} className="absolute left-[15.8%] top-[56.6%]" />
+
+      {/* Flecha: el SVG va girado -68° y reflejado, centrado en su caja del diseño (160.5×140.4) */}
+      <div className="absolute left-[67.8%] top-[24.7%] flex h-[140px] w-[160px] items-center justify-center">
+        <img src="/login/flecha.svg" alt="" width={97} height={134} className="-rotate-68 -scale-x-100" />
+      </div>
+
+      <p className={`${lora.className} absolute left-[10.4%] w-[70%] top-[22%] text-[clamp(28px,2.5vw,36px)] font-bold leading-tight text-white`}>
+        Bolsas que te enamoran a primera vista
+      </p>
+
+      <p className={`${lora.className} pointer-events-none absolute -bottom-[0.2em] left-[3%] select-none whitespace-nowrap text-[clamp(260px,27.8vw,400px)] font-semibold leading-none text-white/20`}>
+        NB
+      </p>
+    </aside>
+  );
+}
 
 export default function LoginPage() {
-  const [state, formAction, pending] = useActionState(
-    async (_prev: typeof initialState, formData: FormData) => {
-      const result = await loginAction(formData);
-      return result ?? initialState;
-    },
-    initialState
-  );
-  const [mostrarPassword, setMostrarPassword] = useState(false);
-
   return (
-    <div className="min-h-screen flex items-center justify-center">
-      <div className="w-full max-w-[300px]">
-        <div className='size-12 text-white mb-4 mx-auto bg-primary rounded-full flex items-center justify-center'>
-          <Lock size={16} />
+    <div className="grid min-h-dvh bg-white lg:grid-cols-[1fr_42.22%]">
+      {/* Celular/tablet: logo arriba y formulario centrado. Escritorio (lg): logo fijo en la
+          esquina y formulario centrado en la pantalla, alineado a x=202 como en el diseño. */}
+      <main className="relative flex flex-col px-6 py-8 sm:px-12 lg:p-0">
+        <div className="lg:absolute lg:left-[66px] lg:top-[52px]">
+          <Logo />
         </div>
-        <div className="mb-6 text-center">
-          <Text variant='title'>Iniciar sesión</Text>
-          <Text variant='description'>Ingresa tus credenciales para continuar</Text>
+        <div className="flex flex-1 items-center justify-center py-10 lg:justify-start lg:py-0 lg:pb-7 lg:pl-[202px]">
+          <div className="w-full max-w-[388px]">
+            <h1 className={`${lora.className} text-[30px] font-semibold leading-tight text-black sm:text-[36px]`}>
+              Bienvenida
+            </h1>
+            <p className="mt-0.5 mb-[38px] text-sm text-black/50">
+              Ingresa tu cuenta para poder ingresar al sistema.
+            </p>
+            <LoginForm />
+          </div>
         </div>
-        <form action={formAction} className="space-y-4">
-          <div className="space-y-1.5">
-            <Label htmlFor="email">Correo electrónico</Label>
-            <Input id="email" name="email" type="email" placeholder="admin@ejemplo.com" required />
-          </div>
-          <div className="space-y-1.5">
-            <Label htmlFor="password">Contraseña</Label>
-            <div className="relative">
-              <Input
-                id="password"
-                name="password"
-                type={mostrarPassword ? 'text' : 'password'}
-                placeholder="••••••••"
-                required
-                className="pr-8"
-              />
-              <button
-                type="button"
-                onClick={() => setMostrarPassword(v => !v)}
-                tabIndex={-1}
-                aria-label={mostrarPassword ? 'Ocultar contraseña' : 'Mostrar contraseña'}
-                className="absolute right-2 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground transition-colors"
-              >
-                {mostrarPassword ? <EyeOff size={14} /> : <Eye size={14} />}
-              </button>
-            </div>
-          </div>
-          {state?.error && (
-            <p className="text-sm text-red-500 bg-red-50 px-3 py-2 rounded-md">{state.error}</p>
-          )}
-          <Button type="submit" variant={'default'} size={'lg'} className="w-full mt-4 h-10" disabled={pending}>
-            {pending ? 'Cargando...' : 'Iniciar sesión'}
-          </Button>
-        </form>
-
-      </div>
+      </main>
+      <PanelMarca />
     </div>
   );
 }
