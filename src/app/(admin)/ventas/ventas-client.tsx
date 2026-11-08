@@ -19,6 +19,7 @@ import { Banknote, CreditCard, ArrowRightLeft, Wallet, X, PlusCircle, CalendarIc
 import { Button } from '@/components/ui/button';
 import type { Venta } from '@/types';
 import type { AbonoListado } from '@/actions/ventas';
+import { estadoPago, fechaFila, montoFila, ultimaActividad, type EstadoPago } from '@/lib/ventas-lista';
 
 const METODO_LABELS: Record<string, string> = {
   efectivo: 'Efectivo',
@@ -31,23 +32,6 @@ const METODO_ICONS: Record<string, React.ReactNode> = {
   transferencia: <ArrowRightLeft size={13} />,
   tarjeta:       <CreditCard size={13} />,
 };
-
-type EstadoPago = 'pagada' | 'parcial' | 'pendiente';
-
-function estadoPago(v: Venta): EstadoPago {
-  if (v.tipo_venta !== 'credito') return 'pagada';
-  const saldo = Number(v.saldo_pendiente ?? 0);
-  if (saldo <= 0) return 'pagada';
-  if (saldo >= Number(v.total)) return 'pendiente';
-  return 'parcial';
-}
-
-// Momento más reciente en que pasó algo con la venta: se hizo o recibió un abono.
-function ultimaActividad(v: Venta): number {
-  const venta = parseMySQL(v.creado_at).getTime();
-  const abono = v.ultimo_abono ? parseMySQL(v.ultimo_abono).getTime() : 0;
-  return Math.max(venta, abono);
-}
 
 const ESTADO_LABELS: Record<EstadoPago, string> = {
   pagada: 'Pagada',
@@ -108,44 +92,33 @@ function buildColumns(router: ReturnType<typeof useRouter>): ColumnDef<Venta>[] 
     id: 'estado_pago',
     header: 'Estado',
     cell: ({ row }) => {
-      const v = row.original;
-      const estado = estadoPago(v);
-      // Apartado ya pagado: cuándo se liquidó (fecha del último abono, la mantiene la BD).
-      const liquidado = v.tipo_venta === 'credito' && estado === 'pagada' && v.ultimo_abono;
+      const estado = estadoPago(row.original);
       return (
-        <div className="flex flex-col items-start gap-0.5">
-          <Badge variant="outline" className={cn('font-normal', ESTADO_CLASSES[estado])}>
-            {ESTADO_LABELS[estado]}
-          </Badge>
-          {liquidado && (
-            <span className="text-[11px] text-green-700 whitespace-nowrap">Liquidado {formatDateShort(v.ultimo_abono)}</span>
-          )}
-        </div>
+        <Badge variant="outline" className={cn('font-normal', ESTADO_CLASSES[estado])}>
+          {ESTADO_LABELS[estado]}
+        </Badge>
       );
     },
   },
   {
-    accessorKey: 'total',
-    header: 'Total',
+    // Contado: el total de la venta. Apartado: lo abonado el día de su último abono.
+    id: 'total',
+    accessorFn: montoFila,
+    header: 'Total de venta',
     cell: ({ row }) => (
-      <span className="font-semibold tabular-nums">{formatCurrency(row.original.total)}</span>
+      <span className="font-semibold tabular-nums">{formatCurrency(montoFila(row.original))}</span>
     ),
   },
   {
-    accessorKey: 'creado_at',
-    header: 'Fecha',
+    // La fecha más reciente entre la venta y su último abono (misma que usa el orden de la lista).
+    id: 'fecha',
+    accessorFn: ultimaActividad,
+    header: 'Fecha de venta o abono',
     cell: ({ row }) => {
       const v = row.original;
-      // En apartados con saldo se indica el último abono (la fecha principal es la del apartado).
-      const abonoPendiente = v.tipo_venta === 'credito' && estadoPago(v) !== 'pagada' && v.ultimo_abono;
-      return (
-        <div className="flex flex-col">
-          <span className="text-muted-foreground text-sm">{formatDate(v.creado_at)}</span>
-          {abonoPendiente && (
-            <span className="text-[11px] text-muted-foreground/80 whitespace-nowrap">Abonó {formatDateShort(v.ultimo_abono)}</span>
-          )}
-        </div>
-      );
+      // Apartado con abonos: la fecha es la de su último abono (ultimo_abono). Si no, la de la venta.
+      const fecha = fechaFila(v);
+      return <span className="text-muted-foreground text-sm whitespace-nowrap">{formatDateShort(fecha)}</span>;
     },
   },
   {

@@ -102,6 +102,8 @@ export interface Venta {
   detalles?: DetalleVenta[];
   // solo presentes cuando la consulta los calcula
   saldo_pendiente?: number;
+  /** Lo abonado el día del último abono (solo en getVentas). */
+  abonado_ultimo_dia?: number;
   abonos?: Abono[];
 }
 

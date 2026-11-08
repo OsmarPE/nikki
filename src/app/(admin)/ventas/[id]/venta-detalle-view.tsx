@@ -7,13 +7,13 @@ import { toast } from 'sonner';
 import {
   ArrowLeft, FileDown, User, Store,
   CreditCard, Banknote, ArrowRightLeft,
-  Package, Hash, Calendar, Receipt, Wallet, Plus, X, Vault,
+  Package, Receipt, Wallet, Plus, X, Vault,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Separator } from '@/components/ui/separator';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { FormField } from '@/components/ui/form-field';
-import { cn, formatCurrency, formatDateLong, formatTime } from '@/lib/utils';
+import { cn, formatCurrency, formatDateLong, formatDateShort, formatTime } from '@/lib/utils';
 import { registrarAbono } from '@/actions/ventas';
 import { getSesionAbierta, abrirCaja } from '@/actions/caja';
 import { zodResolver, abonoSchema, type AbonoFormValues } from '@/lib/validations';
@@ -209,7 +209,7 @@ export default function VentaDetalleView({ venta, puedeAbonar, cajaAbierta }: {
                 {venta.folio}
               </span>
             </div>
-            <p className="text-xs text-muted-foreground mt-0.5 capitalize">
+            <p className="text-xs text-muted-foreground mt-0.5 first-letter:uppercase">
               {formatDateLong(venta.creado_at)} · {formatTime(venta.creado_at)}
             </p>
           </div>
@@ -241,7 +241,9 @@ export default function VentaDetalleView({ venta, puedeAbonar, cajaAbierta }: {
                 {formatCurrency(saldoPendiente)}
               </span>
             }
-            sub={saldoPendiente > 0 ? 'Venta a crédito' : 'Liquidada'}
+            sub={saldoPendiente > 0
+              ? 'Venta a crédito'
+              : venta.ultimo_abono ? `Liquidada el ${formatDateShort(venta.ultimo_abono)}` : 'Liquidada'}
           />
         ) : (
           <StatCard
@@ -271,14 +273,6 @@ export default function VentaDetalleView({ venta, puedeAbonar, cajaAbierta }: {
             <Package size={14} className="text-muted-foreground" />
             <span className="text-sm font-medium">
               {detalles.length} {detalles.length === 1 ? 'producto' : 'productos'}
-            </span>
-          </div>
-          <div className="flex items-center gap-4 text-xs text-muted-foreground">
-            <span className="flex items-center gap-1.5">
-              <Hash size={11} /> ID {String(venta.id).padStart(4, '0')}
-            </span>
-            <span className="flex items-center gap-1.5">
-              <Calendar size={11} /> {formatDateLong(venta.creado_at)}
             </span>
           </div>
         </div>

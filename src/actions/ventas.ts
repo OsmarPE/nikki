@@ -247,7 +247,14 @@ export async function getVentas(filtro?: { desde?: string; hasta?: string }): Pr
 
   const [rows] = await pool.query<RowDataPacket[]>(`
     SELECT v.*, c.nombre AS cliente_nombre, u.nombre AS usuario_nombre,
-           v.total - COALESCE((SELECT SUM(a.monto) FROM abonos a WHERE a.venta_id = v.id), 0) AS saldo_pendiente
+           v.total - COALESCE((SELECT SUM(a.monto) FROM abonos a WHERE a.venta_id = v.id), 0) AS saldo_pendiente,
+           -- Lo abonado el día del último abono (hora de México, ver getDashboardStats): es el
+           -- monto que la lista muestra junto a la fecha de ese último abono.
+           (SELECT COALESCE(SUM(a2.monto), 0) FROM abonos a2
+             WHERE a2.venta_id = v.id
+               AND DATE(a2.creado_at - INTERVAL 6 HOUR) =
+                   (SELECT DATE(MAX(a3.creado_at) - INTERVAL 6 HOUR) FROM abonos a3 WHERE a3.venta_id = v.id)
+           ) AS abonado_ultimo_dia
     FROM ventas v
     LEFT JOIN clientes c ON c.id = v.cliente_id
     JOIN usuarios u ON u.id = v.usuario_id
