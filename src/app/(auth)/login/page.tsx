@@ -1,8 +1,13 @@
 /* eslint-disable @next/next/no-img-element -- recursos decorativos estáticos del diseño (Figma "nikki" › login) */
-import { Lora } from 'next/font/google';
+import localFont from 'next/font/local';
 import LoginForm from './login-form';
 
-const lora = Lora({ subsets: ['latin'], weight: ['600', '700'] });
+// Lora va en el proyecto (fuente variable, subconjunto latin) en vez de next/font/google:
+// el servidor de build de Hostinger fallaba al descargarla de Google Fonts.
+const lora = localFont({
+  src: [{ path: './fonts/lora-latin.woff2', weight: '400 700', style: 'normal' }],
+  display: 'swap',
+});
 
 // Colores de la marca Nikky (diseño de Figma).
 // Panel: #855c80 · Botón: #92678e (ver login-form.tsx).
