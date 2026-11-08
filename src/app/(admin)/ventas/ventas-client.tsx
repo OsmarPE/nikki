@@ -13,7 +13,7 @@ import { Calendar } from '@/components/ui/calendar';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Text } from '@/components/ui/text';
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { cn, formatCurrency, formatDate, formatDateTime, formatTime, parseMySQL, toLocalDateKey, todayLocal } from '@/lib/utils';
+import { cn, formatCurrency, formatDate, formatDateShort, formatDateTime, formatTime, parseMySQL, toLocalDateKey, todayLocal } from '@/lib/utils';
 import { Table, TableBody, TableCell, TableFooter, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Banknote, CreditCard, ArrowRightLeft, Wallet, X, PlusCircle, CalendarIcon } from 'lucide-react';
 import { Button } from '@/components/ui/button';
@@ -40,6 +40,13 @@ function estadoPago(v: Venta): EstadoPago {
   if (saldo <= 0) return 'pagada';
   if (saldo >= Number(v.total)) return 'pendiente';
   return 'parcial';
+}
+
+// Momento más reciente en que pasó algo con la venta: se hizo o recibió un abono.
+function ultimaActividad(v: Venta): number {
+  const venta = parseMySQL(v.creado_at).getTime();
+  const abono = v.ultimo_abono ? parseMySQL(v.ultimo_abono).getTime() : 0;
+  return Math.max(venta, abono);
 }
 
 const ESTADO_LABELS: Record<EstadoPago, string> = {
@@ -101,11 +108,19 @@ function buildColumns(router: ReturnType<typeof useRouter>): ColumnDef<Venta>[] 
     id: 'estado_pago',
     header: 'Estado',
     cell: ({ row }) => {
-      const estado = estadoPago(row.original);
+      const v = row.original;
+      const estado = estadoPago(v);
+      // Apartado ya pagado: cuándo se liquidó (fecha del último abono, la mantiene la BD).
+      const liquidado = v.tipo_venta === 'credito' && estado === 'pagada' && v.ultimo_abono;
       return (
-        <Badge variant="outline" className={cn('font-normal', ESTADO_CLASSES[estado])}>
-          {ESTADO_LABELS[estado]}
-        </Badge>
+        <div className="flex flex-col items-start gap-0.5">
+          <Badge variant="outline" className={cn('font-normal', ESTADO_CLASSES[estado])}>
+            {ESTADO_LABELS[estado]}
+          </Badge>
+          {liquidado && (
+            <span className="text-[11px] text-green-700 whitespace-nowrap">Liquidado {formatDateShort(v.ultimo_abono)}</span>
+          )}
+        </div>
       );
     },
   },
@@ -119,9 +134,19 @@ function buildColumns(router: ReturnType<typeof useRouter>): ColumnDef<Venta>[] 
   {
     accessorKey: 'creado_at',
     header: 'Fecha',
-    cell: ({ row }) => (
-      <span className="text-muted-foreground text-sm">{formatDate(row.original.creado_at)}</span>
-    ),
+    cell: ({ row }) => {
+      const v = row.original;
+      // En apartados con saldo se indica el último abono (la fecha principal es la del apartado).
+      const abonoPendiente = v.tipo_venta === 'credito' && estadoPago(v) !== 'pagada' && v.ultimo_abono;
+      return (
+        <div className="flex flex-col">
+          <span className="text-muted-foreground text-sm">{formatDate(v.creado_at)}</span>
+          {abonoPendiente && (
+            <span className="text-[11px] text-muted-foreground/80 whitespace-nowrap">Abonó {formatDateShort(v.ultimo_abono)}</span>
+          )}
+        </div>
+      );
+    },
   },
   {
     id: 'acciones',
@@ -334,7 +359,10 @@ export default function VentasClient({ ventas, abonos }: { ventas: Venta[]; abon
       const matchFecha = !fecha || toLocalDateKey(v.creado_at) === fecha;
 
       return matchBusqueda && matchMetodo && matchEstado && matchFecha;
-    }),
+    })
+    // Más reciente primero según la última actividad (la venta o su último abono): un apartado
+    // liquidado hoy sube al principio aunque se haya hecho hace semanas.
+    .sort((a, b) => ultimaActividad(b) - ultimaActividad(a)),
   [ventas, busqueda, metodos, estados, fecha]);
 
   // Mismos filtros de búsqueda, método y fecha, pero sobre la fecha en que se cobró el abono.
@@ -503,7 +531,7 @@ export default function VentasClient({ ventas, abonos }: { ventas: Venta[]; abon
       <Tabs value={tab} onValueChange={v => setTab(v as 'ventas' | 'abonos')}>
         <TabsList>
           <TabsTrigger value="ventas">Ventas</TabsTrigger>
-          <TabsTrigger value="abonos">Abonos cobrados</TabsTrigger>
+          <TabsTrigger value="abonos">Abonos y liquidaciones</TabsTrigger>
         </TabsList>
       </Tabs>
 

@@ -95,6 +95,8 @@ export interface Venta {
   descuento_monto: number;
   metodo_pago: 'efectivo' | 'transferencia' | 'tarjeta' | null;
   creado_at: string;
+  /** Fecha del abono más reciente (migración 007, la mantienen triggers en `abonos`); null sin abonos. */
+  ultimo_abono: string | null;
   cliente_nombre?: string;
   usuario_nombre?: string;
   detalles?: DetalleVenta[];

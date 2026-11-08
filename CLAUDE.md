@@ -89,7 +89,9 @@ has `tipo_venta` (`contado` | `credito`); a `credito` sale can be created with n
 `metodo_pago`, `usuario_id`, and `sesion_caja_id`. The outstanding balance is never stored as a column; it's
 always computed as `total - SUM(abonos.monto)` (see `getCuentasPorCobrar` / `registrarAbono` in
 `ventas.ts`) to avoid desync. Each abono is tied to the caja session open when it was collected, same as a
-regular sale.
+regular sale. `ventas.ultimo_abono` (migration 007) is the date of the latest abono; it is maintained by
+MySQL triggers on `abonos` (insert/update/delete), so app code must never write it — any new way of
+creating, editing or deleting abonos keeps it correct automatically.
 
 **Soft deletes are inconsistent by design, not by accident** — check the actual column before writing
 queries:
